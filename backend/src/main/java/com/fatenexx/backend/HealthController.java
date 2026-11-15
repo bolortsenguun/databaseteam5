@@ -11,4 +11,6 @@ public class HealthController {
     public ApiResponse<String> health() {
         return ApiResponse.ok("살아있음", "서버 정상");
     }
+
 }
+
