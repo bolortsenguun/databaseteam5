@@ -77,4 +77,18 @@ public class User {
         user.approvalStatus = (role == Role.TRAINER) ? ApprovalStatus.PENDING : ApprovalStatus.APPROVED;  // BR-ACC-04
         return user;
     }
+
+    public boolean isApproved() {
+        return approvalStatus == ApprovalStatus.APPROVED;
+    }
+
+    public void changePassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+        this.mustChangePassword = false;
+    }
+
+    public void resetPassword(String temporaryPasswordHash) {
+        this.passwordHash = temporaryPasswordHash;
+        this.mustChangePassword = true;   // 초기화 후 다음 로그인 때 변경 강제 (BR-ACC-07)
+    }
 }
