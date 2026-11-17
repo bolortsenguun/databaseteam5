@@ -23,7 +23,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.fatenexx.backend.group.dto.ParticipantResponse;
+import com.fatenexx.backend.group.dto.TrainerGroupClassListResponse;
+import com.fatenexx.backend.group.dto.TrainerGroupClassResponse;
+import com.fatenexx.backend.group.dto.GroupClassCancelRequest;
+import com.fatenexx.backend.group.dto.GroupClassCancelResponse;
+import com.fatenexx.backend.group.dto.GroupClassUpdateRequest;
+import com.fatenexx.backend.reservation.entity.CanceledBy;
+import com.fatenexx.backend.reservation.entity.PtReservation;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -43,6 +52,55 @@ public class GroupClassService {
     private final TrainerDayOffRepository dayOffRepository;
     private final UserRepository userRepository;
     private final SettingService settingService;
+
+    // ② 트레이너 내 그룹 수업 목록
+    public TrainerGroupClassListResponse getMyClasses(Long trainerId, String status,
+                                                      LocalDate startDate, LocalDate endDate) {
+        GroupClassStatus filter = parseStatus(status);
+        LocalDate start = startDate != null ? startDate : LocalDate.now();
+        LocalDate end = endDate != null ? endDate : start.plusDays(settingService.getInt(SettingKey.GROUP_OPEN_MAX_DAYS));
+        if (start.isAfter(end)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "올바른 조회 조건을 입력해 주세요.");
+        }
+
+        List<GroupClass> classes = groupClassRepository
+                .findByTrainerIdAndClassDateBetweenOrderByClassDateAscStartTimeAsc(trainerId, start, end)
+                .stream()
+                .filter(g -> filter == null || g.getStatus() == filter)
+                .toList();
+
+        Map<Long, List<ParticipantResponse>> participants = getParticipants(
+                classes.stream().map(GroupClass::getId).toList());
+
+        List<TrainerGroupClassResponse> items = classes.stream()
+                .map(g -> TrainerGroupClassResponse.of(g, participants.getOrDefault(g.getId(), List.of())))
+                .toList();
+        return new TrainerGroupClassListResponse(items);
+    }
+
+    // 수업별 참여자 (취소 제외)
+    private Map<Long, List<ParticipantResponse>> getParticipants(List<Long> classIds) {
+        if (classIds.isEmpty()) {
+            return Map.of();
+        }
+        return reservationRepository.findWithUserByGroupClassIdIn(classIds, ReservationStatus.CANCELED).stream()
+                .collect(Collectors.groupingBy(
+                        r -> r.getGroupClass().getId(),
+                        Collectors.mapping(ParticipantResponse::from, Collectors.toList())));
+    }
+
+    // "전체"·null → 필터 없음, 그 외 라벨 → 상태, 모르는 값 → 400
+    private GroupClassStatus parseStatus(String value) {
+        if (value == null || value.equals("전체")) {
+            return null;
+        }
+        for (GroupClassStatus s : GroupClassStatus.values()) {
+            if (s.getLabel().equals(value)) {
+                return s;
+            }
+        }
+        throw new BusinessException(ErrorCode.INVALID_INPUT, "올바른 조회 조건을 입력해 주세요.");
+    }
 
     // ③ 그룹 수업 개설 가능 시간
     public AvailableSlotsResponse getAvailableSlots(Long trainerId, LocalDate classDate) {
@@ -90,6 +148,93 @@ public class GroupClassService {
             throw new BusinessException(ErrorCode.CLASS_TIME_CONFLICT);
         }
         return GroupClassResponse.of(g, 0);
+    }
+
+    // ⑤ 그룹 수업 수정 (신청자 0명일 때만)
+    @Transactional
+    public GroupClassResponse update(Long trainerId, Long classId, GroupClassUpdateRequest req) {
+        if (req.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "수정할 항목을 하나 이상 입력해 주세요.");
+        }
+        GroupClass g = getOwnClass(trainerId, classId);
+        if (g.getStatus() != GroupClassStatus.OPEN || hasStarted(g)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "개설 상태이고 시작 전인 수업만 수정할 수 있습니다.");
+        }
+        if (reservationRepository.countByGroupClassIdAndStatusNot(classId, ReservationStatus.CANCELED) > 0) {
+            throw new BusinessException(ErrorCode.CLASS_HAS_PARTICIPANTS);
+        }
+
+        String name = req.name() != null ? req.name() : g.getName();
+        if (name.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "수업명을 입력해 주세요.");
+        }
+        String description = req.description() != null ? blankToNull(req.description()) : g.getDescription();
+        LocalDate date = req.classDate() != null ? req.classDate() : g.getClassDate();
+        LocalTime start = req.startTime() != null ? req.startTime() : g.getStartTime();
+        int capacity = req.capacity() != null ? req.capacity() : g.getCapacity();
+
+        validateCapacity(capacity);
+        if (req.classDate() != null || req.startTime() != null) {
+            validateStartTime(start);
+            checkAvailable(trainerId, date, start, classId);   // 자기 자신은 겹침 검사에서 빼기
+        }
+
+        g.update(name, description, date, start, capacity);
+        try {
+            groupClassRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.CLASS_TIME_CONFLICT);
+        }
+        return GroupClassResponse.of(g, 0);
+    }
+
+    // ⑥ 그룹 수업 삭제 (예약 기록이 한 번도 없을 때만)
+    @Transactional
+    public void delete(Long trainerId, Long classId) {
+        GroupClass g = getOwnClass(trainerId, classId);
+        if (hasStarted(g)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "시작 전인 수업만 삭제할 수 있습니다.");
+        }
+        if (reservationRepository.existsByGroupClassId(classId)) {
+            throw new BusinessException(ErrorCode.CLASS_HAS_RESERVATIONS);
+        }
+        groupClassRepository.delete(g);
+    }
+
+    // ⑦ 그룹 수업 취소 (트레이너 사정, 신청자 전원 차감 없이 취소)
+    @Transactional
+    public GroupClassCancelResponse cancel(Long trainerId, Long classId, GroupClassCancelRequest req) {
+        String reason = req == null ? null : req.cancelReason();
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.CANCEL_REASON_REQUIRED);
+        }
+        if (reason.length() > 200) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "취소 사유는 200자 이하로 입력해 주세요.");
+        }
+        GroupClass g = getOwnClass(trainerId, classId);
+        if (!ACTIVE.contains(g.getStatus()) || hasStarted(g)) {
+            throw new BusinessException(ErrorCode.CLASS_NOT_CANCELABLE);
+        }
+
+        g.cancel(reason);
+        List<PtReservation> active = reservationRepository.findByGroupClassIdAndStatus(classId, ReservationStatus.RESERVED);
+        active.forEach(r -> r.cancel(CanceledBy.TRAINER, reason, false));   // 차감 없음 (BR-GRP-09)
+
+        return new GroupClassCancelResponse(classId, g.getStatus().getLabel(), reason, g.getCanceledAt(), active.size());
+    }
+
+    // 내 수업인지 확인 (없으면 404, 남의 수업이면 403)
+    private GroupClass getOwnClass(Long trainerId, Long classId) {
+        GroupClass g = groupClassRepository.findById(classId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.GROUP_CLASS_NOT_FOUND));
+        if (!g.getTrainer().getId().equals(trainerId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "본인이 개설한 그룹 수업만 변경할 수 있습니다.");
+        }
+        return g;
+    }
+
+    private boolean hasStarted(GroupClass g) {
+        return !LocalDateTime.of(g.getClassDate(), g.getStartTime()).isAfter(LocalDateTime.now());
     }
 
     // ===== 공통 검사 =====

@@ -20,4 +20,8 @@ public interface GroupClassRepository extends JpaRepository<GroupClass, Long> {
     // 그날의 그룹 수업 (특정 상태들만)
     List<GroupClass> findByTrainerIdAndClassDateAndStatusIn(
             Long trainerId, LocalDate classDate, Collection<GroupClassStatus> statuses);
+
+    // 트레이너의 기간 내 수업 (날짜·시간 순)
+    List<GroupClass> findByTrainerIdAndClassDateBetweenOrderByClassDateAscStartTimeAsc(
+            Long trainerId, LocalDate start, LocalDate end);
 }
