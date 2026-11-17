@@ -9,6 +9,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.fatenexx.backend.global.exception.BusinessException;
+import com.fatenexx.backend.global.exception.ErrorCode;
 
 import java.time.LocalDate;
 
@@ -71,5 +73,13 @@ public class PtPass {
         p.remainingCount = product.getTotalCount();
         p.price = product.getPrice();
         return p;
+    }
+
+    // 1회 차감 (A 추가: 회원 차감 취소, 출석·결석 처리에서 사용)
+    public void deduct() {
+        if (remainingCount <= 0) {
+            throw new BusinessException(ErrorCode.NO_AVAILABLE_COUNT);
+        }
+        this.remainingCount--;
     }
 }

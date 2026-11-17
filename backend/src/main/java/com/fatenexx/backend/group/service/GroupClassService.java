@@ -42,6 +42,7 @@ import com.fatenexx.backend.group.dto.MemberGroupClassListResponse;
 import com.fatenexx.backend.group.dto.MemberGroupClassResponse;
 import com.fatenexx.backend.product.entity.PtType;
 import com.fatenexx.backend.reservation.service.PtPassSelector;
+import com.fatenexx.backend.reservation.dto.GroupReservationResponse;
 
 import java.util.HashMap;
 @Service
@@ -120,6 +121,76 @@ public class GroupClassService {
         return reservationRepository.countByGroupClassIds(classIds, ReservationStatus.CANCELED).stream()
                 .collect(Collectors.toMap(r -> (Long) r[0], r -> (Long) r[1]));
     }
+
+    // 그룹 신청 때만 명세 문구가 다른 에러
+    private static final Map<String, String> APPLY_MESSAGES = Map.of(
+            "BOOKING_CLOSED", "예약 가능 시간이 지났습니다.",
+            "NO_AVAILABLE_COUNT", "예약 가능한 그룹 PT 횟수가 부족합니다.",
+            "REBOOK_NOT_ALLOWED", "이미 차감 취소한 그룹 수업은 다시 신청할 수 없습니다.");
+
+    // PT Reservation ⑥ 그룹 PT 수업 신청
+    @Transactional
+    public GroupReservationResponse apply(Long userId, Long classId) {
+        GroupClass g = groupClassRepository.findByIdForUpdate(classId)   // 수업 행 잠금
+                .orElseThrow(() -> new BusinessException(ErrorCode.GROUP_CLASS_NOT_FOUND));
+
+        // 개설·확정이 아니거나 14일 범위 밖이면 회원에게 안 보이는 수업 → 404
+        LocalDate today = LocalDate.now();
+        LocalDate maxDate = today.plusDays(settingService.getInt(SettingKey.BOOKING_RANGE_DAYS));
+        if (!ACTIVE.contains(g.getStatus()) || g.getClassDate().isBefore(today) || g.getClassDate().isAfter(maxDate)) {
+            throw new BusinessException(ErrorCode.GROUP_CLASS_NOT_FOUND);
+        }
+
+        int current = (int) reservationRepository.countByGroupClassIdAndStatusNot(classId, ReservationStatus.CANCELED);
+        List<PtReservation> mine = reservationRepository.findByUserIdAndLessonDateBetween(
+                userId, g.getClassDate(), g.getClassDate());
+
+        String reason = findReason(g, current, mine, LocalDateTime.now(),
+                settingService.getInt(SettingKey.BOOKING_CLOSE_HOURS), userId, new HashMap<>());
+        if (reason != null) {
+            ErrorCode code = ErrorCode.valueOf(reason);
+            throw new BusinessException(code, APPLY_MESSAGES.getOrDefault(reason, code.getMessage()));
+        }
+
+        PtPassSelector.Result pass = passSelector.select(userId, PtType.GROUP, null, g.getClassDate());
+        User member = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        PtReservation r = PtReservation.createGroup(pass.pass(), member, g);
+        try {
+            reservationRepository.saveAndFlush(r);
+        } catch (DataIntegrityViolationException e) {
+            String msg = String.valueOf(e.getMostSpecificCause().getMessage());
+            throw new BusinessException(msg.contains("uq_resv_user_day")
+                    ? ErrorCode.DAILY_LIMIT_REACHED : ErrorCode.ALREADY_RESERVED);
+        }
+        return GroupReservationResponse.of(r, current + 1);
+    }
+    public record DecisionResult(int confirmed, int closed) {
+    }
+
+    // 스케줄러: 시작 24시간 전이 된 개설 수업 확정·폐강 (BR-GRP-13)
+    @Transactional
+    public DecisionResult decideDueClasses() {
+        LocalDateTime limit = LocalDateTime.now().plusHours(settingService.getInt(SettingKey.GROUP_CONFIRM_HOURS));
+        int min = settingService.getInt(SettingKey.GROUP_MIN_PARTICIPANTS);
+        int confirmed = 0;
+        int closed = 0;
+        for (GroupClass g : groupClassRepository.findDueForDecision(
+                GroupClassStatus.OPEN, limit.toLocalDate(), limit.toLocalTime())) {
+            long count = reservationRepository.countByGroupClassIdAndStatusNot(g.getId(), ReservationStatus.CANCELED);
+            if (count >= min) {
+                g.confirm();
+                confirmed++;
+            } else {
+                g.close();
+                reservationRepository.findByGroupClassIdAndStatus(g.getId(), ReservationStatus.RESERVED)
+                        .forEach(r -> r.cancel(CanceledBy.CLASS_CLOSED, null, false));   // 차감 없음
+                closed++;
+            }
+        }
+        return new DecisionResult(confirmed, closed);
+    }
+
 
     // ② 트레이너 내 그룹 수업 목록
     public TrainerGroupClassListResponse getMyClasses(Long trainerId, String status,

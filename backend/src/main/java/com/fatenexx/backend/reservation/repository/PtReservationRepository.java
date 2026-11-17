@@ -2,12 +2,19 @@ package com.fatenexx.backend.reservation.repository;
 
 import com.fatenexx.backend.reservation.entity.PtReservation;
 import com.fatenexx.backend.reservation.entity.ReservationStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import com.fatenexx.backend.product.entity.PtType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import java.time.LocalTime;
 
 public interface PtReservationRepository extends JpaRepository<PtReservation, Long> {
 
@@ -47,4 +54,63 @@ public interface PtReservationRepository extends JpaRepository<PtReservation, Lo
 
     // 회원의 기간 내 예약 전부 (취소 포함)
     List<PtReservation> findByUserIdAndLessonDateBetween(Long userId, LocalDate start, LocalDate end);
+
+    // 내 예약 목록 (조건 null이면 안 걸음)
+    @Query("select r from PtReservation r join fetch r.ptPass p join fetch r.trainer left join fetch r.groupClass " +
+            "where r.user.id = :userId " +
+            "and (:status is null or r.status = :status) " +
+            "and (:ptType is null or p.ptType = :ptType) " +
+            "order by r.lessonDate desc, r.startTime desc, r.id desc")
+    List<PtReservation> findMine(@Param("userId") Long userId,
+                                 @Param("status") ReservationStatus status,
+                                 @Param("ptType") PtType ptType);
+
+    // 취소·출석 처리용: 예약 행 잠금 조회
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from PtReservation r where r.id = :id")
+    Optional<PtReservation> findByIdForUpdate(@Param("id") Long id);
+
+    // 트레이너 수업 일정: 날짜·상태 조건은 null이면 안 걸음
+    @Query("select r from PtReservation r join fetch r.user left join fetch r.groupClass " +
+            "where r.trainer.id = :trainerId " +
+            "and (:start is null or r.lessonDate >= :start) " +
+            "and (:end is null or r.lessonDate <= :end) " +
+            "and (:status is null or r.status = :status) " +
+            "order by r.lessonDate, r.startTime, r.id")
+    List<PtReservation> findLessons(@Param("trainerId") Long trainerId,
+                                    @Param("start") LocalDate start,
+                                    @Param("end") LocalDate end,
+                                    @Param("status") ReservationStatus status);
+
+    // 관리자 예약 목록 (조건 null이면 안 걸음, 페이징)
+    @Query(value = "select r from PtReservation r join fetch r.user join fetch r.trainer " +
+            "join fetch r.ptPass p left join fetch r.groupClass " +
+            "where (:userId is null or r.user.id = :userId) " +
+            "and (:trainerId is null or r.trainer.id = :trainerId) " +
+            "and (:ptType is null or p.ptType = :ptType) " +
+            "and (:status is null or r.status = :status) " +
+            "and (:start is null or r.lessonDate >= :start) " +
+            "and (:end is null or r.lessonDate <= :end) " +
+            "order by r.lessonDate desc, r.startTime desc, r.id desc",
+            countQuery = "select count(r) from PtReservation r join r.ptPass p " +
+                    "where (:userId is null or r.user.id = :userId) " +
+                    "and (:trainerId is null or r.trainer.id = :trainerId) " +
+                    "and (:ptType is null or p.ptType = :ptType) " +
+                    "and (:status is null or r.status = :status) " +
+                    "and (:start is null or r.lessonDate >= :start) " +
+                    "and (:end is null or r.lessonDate <= :end)")
+    Page<PtReservation> searchForAdmin(@Param("userId") Long userId,
+                                       @Param("trainerId") Long trainerId,
+                                       @Param("ptType") PtType ptType,
+                                       @Param("status") ReservationStatus status,
+                                       @Param("start") LocalDate start,
+                                       @Param("end") LocalDate end,
+                                       Pageable pageable);
+
+    // 스케줄러: 종료 시각이 지난 특정 상태 예약
+    @Query("select r from PtReservation r where r.status = :status " +
+            "and (r.lessonDate < :today or (r.lessonDate = :today and r.endTime <= :now))")
+    List<PtReservation> findEnded(@Param("status") ReservationStatus status,
+                                  @Param("today") LocalDate today,
+                                  @Param("now") LocalTime now);
 }
