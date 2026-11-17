@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -54,9 +55,15 @@ public class AuthService {
         return !userRepository.existsByLoginId(loginId);
     }
 
+    // 없으면 예외
     public User getUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    // 없을 수 있는 경우용 (예: 가입이 거절되어 계정이 삭제된 트레이너의 세션)
+    public Optional<User> findUser(Long userId) {
+        return userRepository.findById(userId);
     }
 
     @Transactional
