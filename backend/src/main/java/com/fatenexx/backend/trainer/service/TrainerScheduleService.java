@@ -22,7 +22,9 @@ import com.fatenexx.backend.group.entity.GroupClassStatus;
 import com.fatenexx.backend.group.repository.GroupClassRepository;
 import com.fatenexx.backend.reservation.entity.ReservationStatus;
 import com.fatenexx.backend.reservation.repository.PtReservationRepository;
-
+import com.fatenexx.backend.trainer.dto.DayOffCreateRequest;
+import com.fatenexx.backend.trainer.dto.DayOffCreateResponse;
+import com.fatenexx.backend.trainer.entity.TrainerDayOff;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -88,6 +90,33 @@ public class TrainerScheduleService {
             throw new BusinessException(ErrorCode.SCHEDULE_HAS_BOOKINGS);
         }
         scheduleRepository.delete(schedule);
+    }
+
+    // ⑨ 휴무 추가
+    @Transactional
+    public DayOffCreateResponse addDayOff(LoginUser loginUser, Long trainerId, DayOffCreateRequest request) {
+        checkAccess(loginUser, trainerId);
+        User trainer = getApprovedTrainer(trainerId);
+        LocalDate offDate = request.offDate();
+
+        if (offDate.isBefore(LocalDate.now())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "오늘 이후 날짜만 휴무로 등록할 수 있습니다.");
+        }
+        if (dayOffRepository.existsByTrainerIdAndOffDate(trainerId, offDate)) {
+            throw new BusinessException(ErrorCode.DAY_OFF_ALREADY_EXISTS);
+        }
+
+        boolean hasReservation = reservationRepository
+                .existsByTrainerIdAndLessonDateAndStatus(trainerId, offDate, ReservationStatus.RESERVED);
+        boolean hasGroupClass = groupClassRepository
+                .existsByTrainerIdAndClassDateAndStatusIn(
+                        trainerId, offDate, List.of(GroupClassStatus.OPEN, GroupClassStatus.CONFIRMED));
+        if (hasReservation || hasGroupClass) {
+            throw new BusinessException(ErrorCode.DAY_OFF_CONFLICT);
+        }
+
+        TrainerDayOff saved = dayOffRepository.save(TrainerDayOff.create(trainer, offDate));
+        return DayOffCreateResponse.from(saved, trainerId);
     }
 
     // 트레이너는 본인만, 관리자는 누구나

@@ -13,4 +13,7 @@ public interface GroupClassRepository extends JpaRepository<GroupClass, Long> {
     // 트레이너의 특정 상태들(개설·확정 등) 수업 중 date 이후 것
     List<GroupClass> findByTrainerIdAndStatusInAndClassDateGreaterThanEqual(
             Long trainerId, Collection<GroupClassStatus> statuses, LocalDate date);
+
+    boolean existsByTrainerIdAndClassDateAndStatusIn(Long trainerId, LocalDate classDate,
+                                                     Collection<GroupClassStatus> statuses);
 }

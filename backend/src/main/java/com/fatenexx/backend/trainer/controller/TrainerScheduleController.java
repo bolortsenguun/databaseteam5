@@ -14,6 +14,9 @@ import com.fatenexx.backend.trainer.dto.ScheduleCreateResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.fatenexx.backend.trainer.dto.DayOffCreateRequest;
+import com.fatenexx.backend.trainer.dto.DayOffCreateResponse;
+
 
 @RestController
 @RequiredArgsConstructor
@@ -50,5 +53,16 @@ public class TrainerScheduleController {
                                             @PathVariable Long scheduleId) {
         trainerScheduleService.deleteSchedule(loginUser, trainerId, scheduleId);
         return ApiResponse.ok(null, "근무 일정이 삭제되었습니다.");
+    }
+
+    // ⑨ 휴무 추가
+    @Roles({Role.TRAINER, Role.ADMIN})
+    @PostMapping("/days-off")
+    public ResponseEntity<ApiResponse<DayOffCreateResponse>> addDayOff(@Login LoginUser loginUser,
+                                                                       @PathVariable Long trainerId,
+                                                                       @Valid @RequestBody DayOffCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(trainerScheduleService.addDayOff(loginUser, trainerId, request),
+                        "휴무일이 등록되었습니다."));
     }
 }

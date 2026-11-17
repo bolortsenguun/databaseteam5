@@ -12,4 +12,6 @@ public interface PtReservationRepository extends JpaRepository<PtReservation, Lo
     // 트레이너의 특정 상태 예약 중 date 이후 것
     List<PtReservation> findByTrainerIdAndStatusAndLessonDateGreaterThanEqual(
             Long trainerId, ReservationStatus status, LocalDate date);
+
+    boolean existsByTrainerIdAndLessonDateAndStatus(Long trainerId, LocalDate lessonDate, ReservationStatus status);
 }
