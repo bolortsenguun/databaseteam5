@@ -65,4 +65,14 @@ public class TrainerScheduleController {
                 .body(ApiResponse.ok(trainerScheduleService.addDayOff(loginUser, trainerId, request),
                         "휴무일이 등록되었습니다."));
     }
+
+    // ⑩ 휴무 삭제
+    @Roles({Role.TRAINER, Role.ADMIN})
+    @DeleteMapping("/days-off/{dayOffId}")
+    public ApiResponse<Void> deleteDayOff(@Login LoginUser loginUser,
+                                          @PathVariable Long trainerId,
+                                          @PathVariable Long dayOffId) {
+        trainerScheduleService.deleteDayOff(loginUser, trainerId, dayOffId);
+        return ApiResponse.ok(null, "휴무일이 삭제되었습니다.");
+    }
 }

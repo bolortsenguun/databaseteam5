@@ -119,6 +119,18 @@ public class TrainerScheduleService {
         return DayOffCreateResponse.from(saved, trainerId);
     }
 
+    // ⑩ 휴무 삭제
+    @Transactional
+    public void deleteDayOff(LoginUser loginUser, Long trainerId, Long dayOffId) {
+        checkAccess(loginUser, trainerId);
+
+        TrainerDayOff dayOff = dayOffRepository.findById(dayOffId)
+                .filter(d -> d.getTrainer().getId().equals(trainerId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.DAY_OFF_NOT_FOUND));
+
+        dayOffRepository.delete(dayOff);
+    }
+
     // 트레이너는 본인만, 관리자는 누구나
     private void checkAccess(LoginUser loginUser, Long trainerId) {
         if (loginUser.role() == Role.TRAINER && !loginUser.userId().equals(trainerId)) {
