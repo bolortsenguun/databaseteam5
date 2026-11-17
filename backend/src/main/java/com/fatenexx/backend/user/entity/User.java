@@ -105,4 +105,9 @@ public class User {
         if (career != null) this.career = career.isBlank() ? null : career;
         if (introduction != null) this.introduction = introduction.isBlank() ? null : introduction;
     }
+
+    // 트레이너 가입 승인 (A: 관리자 트레이너 승인 API에서 사용)
+    public void approve() {
+        this.approvalStatus = ApprovalStatus.APPROVED;
+    }
 }

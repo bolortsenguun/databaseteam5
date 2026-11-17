@@ -7,6 +7,8 @@ import com.fatenexx.backend.trainer.dto.AdminTrainerListResponse;
 import com.fatenexx.backend.trainer.service.TrainerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import com.fatenexx.backend.trainer.dto.TrainerApproveResponse;
+import com.fatenexx.backend.trainer.dto.TrainerRejectResponse;
 
 @RestController
 @RequiredArgsConstructor
@@ -24,5 +26,18 @@ public class AdminTrainerController {
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(trainerService.getTrainersForAdmin(approvalStatus, page, size),
                 "트레이너 목록을 조회했습니다.");
+    }
+
+
+    // ③ 트레이너 가입 승인
+    @PostMapping("/{trainerId}/approve")
+    public ApiResponse<TrainerApproveResponse> approve(@PathVariable Long trainerId) {
+        return ApiResponse.ok(trainerService.approve(trainerId), "트레이너 가입이 승인되었습니다.");
+    }
+
+    // ④ 트레이너 가입 거절
+    @PostMapping("/{trainerId}/reject")
+    public ApiResponse<TrainerRejectResponse> reject(@PathVariable Long trainerId) {
+        return ApiResponse.ok(trainerService.reject(trainerId), "트레이너 가입이 거절되었습니다.");
     }
 }

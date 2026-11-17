@@ -18,6 +18,8 @@ import com.fatenexx.backend.trainer.dto.AdminTrainerResponse;
 import com.fatenexx.backend.user.entity.ApprovalStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import com.fatenexx.backend.trainer.dto.TrainerApproveResponse;
+import com.fatenexx.backend.trainer.dto.TrainerRejectResponse;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -87,6 +89,33 @@ public class TrainerService {
                         workTimes.getOrDefault(t.getId(), List.of())))
                 .toList();
         return new AdminTrainerListResponse(items, page, size, totalCount, totalPages);
+    }
+
+    // ③ 트레이너 가입 승인
+    @Transactional
+    public TrainerApproveResponse approve(Long trainerId) {
+        User trainer = findTrainer(trainerId);
+        if (trainer.isApproved()) {
+            throw new BusinessException(ErrorCode.ALREADY_APPROVED);
+        }
+        trainer.approve();
+        return new TrainerApproveResponse(trainerId, trainer.getApprovalStatus().getLabel());
+    }
+
+    // ④ 트레이너 가입 거절 → 계정 삭제 (BR-ACC-04)
+    @Transactional
+    public TrainerRejectResponse reject(Long trainerId) {
+        User trainer = findTrainer(trainerId);
+        if (trainer.isApproved()) {
+            throw new BusinessException(ErrorCode.ALREADY_APPROVED, "승인된 트레이너의 가입을 거절할 수 없습니다.");
+        }
+        userRepository.delete(trainer);
+        return new TrainerRejectResponse(trainerId, true);
+    }
+
+    private User findTrainer(Long trainerId) {
+        return userRepository.findByIdAndRole(trainerId, Role.TRAINER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
     }
 
     // "전체"·null → 필터 없음, "승인대기" / "승인" → 해당 상태, 그 외 → 400

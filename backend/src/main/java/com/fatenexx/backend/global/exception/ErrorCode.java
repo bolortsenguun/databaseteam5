@@ -35,8 +35,8 @@ public enum ErrorCode {
     SCHEDULE_HAS_BOOKINGS(HttpStatus.CONFLICT, "예약된 PT 또는 그룹 수업이 있어 근무 일정을 삭제할 수 없습니다."),
     DAY_OFF_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 휴무로 등록된 날짜입니다."),
     DAY_OFF_CONFLICT(HttpStatus.CONFLICT, "해당 날짜에 예약된 수업이 있어 휴무를 등록할 수 없습니다."),
-    DAY_OFF_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 휴무일을 찾을 수 없습니다.");
-
+    DAY_OFF_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 휴무일을 찾을 수 없습니다."),
+    ALREADY_APPROVED(HttpStatus.CONFLICT, "이미 승인된 트레이너입니다.");
 
 
 
