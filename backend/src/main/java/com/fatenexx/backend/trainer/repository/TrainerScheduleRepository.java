@@ -17,4 +17,7 @@ public interface TrainerScheduleRepository extends JpaRepository<TrainerSchedule
 
     // 여러 트레이너의 근무를 한 번에
     List<TrainerSchedule> findByTrainerIdInOrderByDayOfWeekAscStartTimeAsc(Collection<Long> trainerIds);
+
+    // 특정 요일의 근무
+    List<TrainerSchedule> findByTrainerIdAndDayOfWeekOrderByStartTimeAsc(Long trainerId, Integer dayOfWeek);
 }
