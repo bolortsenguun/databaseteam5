@@ -47,7 +47,25 @@ public enum ErrorCode {
     CLASS_HAS_RESERVATIONS(HttpStatus.CONFLICT, "예약 이력이 있는 그룹 수업은 삭제할 수 없습니다. 수업 취소 기능을 이용해 주세요."),
     CLASS_NOT_CANCELABLE(HttpStatus.CONFLICT, "이미 취소되었거나 시작된 그룹 수업은 취소할 수 없습니다."),
     CANCEL_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "취소 사유를 입력해 주세요."),
-    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "조회 가능한 날짜 범위를 확인해 주세요.");
+    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "조회 가능한 날짜 범위를 확인해 주세요."),
+
+    // Reservation
+    SLOT_UNAVAILABLE(HttpStatus.CONFLICT, "선택한 시간에는 예약할 수 없습니다."),
+    BOOKING_CLOSED(HttpStatus.CONFLICT, "수업 시작 1시간 전까지만 예약할 수 있습니다."),
+    DAILY_LIMIT_REACHED(HttpStatus.CONFLICT, "하루에 한 번만 PT를 예약할 수 있습니다."),
+    NO_VALID_PERSONAL_PASS(HttpStatus.CONFLICT, "해당 트레이너의 유효한 개인 PT 이용권이 없습니다."),
+    NO_VALID_GROUP_PASS(HttpStatus.CONFLICT, "유효한 그룹 PT 이용권이 없습니다."),
+    NO_AVAILABLE_COUNT(HttpStatus.CONFLICT, "예약 가능한 PT 횟수가 부족합니다."),
+    REBOOK_NOT_ALLOWED(HttpStatus.CONFLICT, "이미 차감 취소한 수업은 다시 예약할 수 없습니다."),
+    CLASS_FULL(HttpStatus.CONFLICT, "그룹 수업 정원이 마감되었습니다."),
+    ALREADY_RESERVED(HttpStatus.CONFLICT, "이미 신청한 그룹 수업입니다."),
+    RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 예약을 찾을 수 없습니다."),
+    RESERVATION_NOT_CANCELABLE(HttpStatus.CONFLICT, "이미 취소되었거나 수업이 시작된 예약은 취소할 수 없습니다."),
+    DEDUCTION_CONFIRMATION_REQUIRED(HttpStatus.CONFLICT, "취소 시 PT 1회가 차감됩니다. 확인 후 다시 요청해 주세요."),
+    INVALID_RESERVATION_STATE(HttpStatus.CONFLICT, "해당 예약은 출석·결석 처리할 수 없습니다."),
+    LESSON_NOT_STARTED(HttpStatus.CONFLICT, "수업 시작 후 출석·결석을 처리할 수 있습니다."),
+    INVALID_RESERVATION_TYPE(HttpStatus.CONFLICT, "그룹 PT 수업은 그룹 수업 취소 기능을 이용해 주세요.");
+
 
     private final HttpStatus status;
     private final String message;

@@ -8,6 +8,10 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.repository.query.Param;
+import java.util.Optional;
 
 public interface GroupClassRepository extends JpaRepository<GroupClass, Long> {
 
@@ -32,4 +36,8 @@ public interface GroupClassRepository extends JpaRepository<GroupClass, Long> {
             "order by g.classDate, g.startTime")
     List<GroupClass> findForMember(@Param("statuses") Collection<GroupClassStatus> statuses,
                                    @Param("start") LocalDate start, @Param("end") LocalDate end);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select g from GroupClass g where g.id = :id")
+    Optional<GroupClass> findByIdForUpdate(@Param("id") Long id);
 }
