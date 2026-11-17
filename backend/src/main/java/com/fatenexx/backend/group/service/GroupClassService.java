@@ -38,7 +38,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.fatenexx.backend.group.dto.MemberGroupClassListResponse;
+import com.fatenexx.backend.group.dto.MemberGroupClassResponse;
+import com.fatenexx.backend.product.entity.PtType;
+import com.fatenexx.backend.reservation.service.PtPassSelector;
 
+import java.util.HashMap;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -52,6 +57,69 @@ public class GroupClassService {
     private final TrainerDayOffRepository dayOffRepository;
     private final UserRepository userRepository;
     private final SettingService settingService;
+    private final PtPassSelector passSelector;
+
+    // ① 회원용 그룹 수업 목록 (오늘 ~ 14일)
+    public MemberGroupClassListResponse getClassesForMember(Long userId, LocalDate startDate, LocalDate endDate) {
+        LocalDate today = LocalDate.now();
+        LocalDate maxDate = today.plusDays(settingService.getInt(SettingKey.BOOKING_RANGE_DAYS));
+        LocalDate start = startDate != null ? startDate : today;
+        LocalDate end = endDate != null ? endDate : maxDate;
+        if (start.isBefore(today) || end.isAfter(maxDate) || start.isAfter(end)) {
+            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
+        }
+
+        List<GroupClass> classes = groupClassRepository.findForMember(ACTIVE, start, end);
+        Map<Long, Long> counts = countParticipants(classes.stream().map(GroupClass::getId).toList());
+        List<PtReservation> mine = reservationRepository.findByUserIdAndLessonDateBetween(userId, start, end);
+
+        LocalDateTime now = LocalDateTime.now();
+        int closeHours = settingService.getInt(SettingKey.BOOKING_CLOSE_HOURS);
+        Map<LocalDate, String> passReasonByDate = new HashMap<>();   // 이용권 판단은 날짜별로 한 번만
+
+        List<MemberGroupClassResponse> items = new ArrayList<>();
+        for (GroupClass g : classes) {
+            int current = counts.getOrDefault(g.getId(), 0L).intValue();
+            String reason = findReason(g, current, mine, now, closeHours, userId, passReasonByDate);
+            items.add(MemberGroupClassResponse.of(g, current, reason));
+        }
+        return new MemberGroupClassListResponse(items);
+    }
+
+    // 신청 못 하는 이유 (우선순위 순), 신청 가능하면 null
+    private String findReason(GroupClass g, int current, List<PtReservation> mine, LocalDateTime now,
+                              int closeHours, Long userId, Map<LocalDate, String> passReasonByDate) {
+        boolean alreadyReserved = mine.stream().anyMatch(r -> isSameClass(r, g) && r.getStatus() != ReservationStatus.CANCELED);
+        if (alreadyReserved) return "ALREADY_RESERVED";
+
+        if (current >= g.getCapacity()) return "CLASS_FULL";
+
+        LocalDateTime closeAt = LocalDateTime.of(g.getClassDate(), g.getStartTime()).minusHours(closeHours);
+        if (!now.isBefore(closeAt)) return "BOOKING_CLOSED";
+
+        boolean sameDay = mine.stream().anyMatch(r -> r.getLessonDate().equals(g.getClassDate())
+                && r.getStatus() != ReservationStatus.CANCELED);
+        if (sameDay) return "DAILY_LIMIT_REACHED";
+
+        boolean deductedCancel = mine.stream().anyMatch(r -> isSameClass(r, g)
+                && r.getStatus() == ReservationStatus.CANCELED && r.isDeducted());
+        if (deductedCancel) return "REBOOK_NOT_ALLOWED";
+
+        return passReasonByDate.computeIfAbsent(g.getClassDate(),
+                d -> passSelector.select(userId, PtType.GROUP, null, d).reason());
+    }
+
+    private boolean isSameClass(PtReservation r, GroupClass g) {
+        return r.getGroupClass() != null && r.getGroupClass().getId().equals(g.getId());
+    }
+
+    private Map<Long, Long> countParticipants(List<Long> classIds) {
+        if (classIds.isEmpty()) {
+            return Map.of();
+        }
+        return reservationRepository.countByGroupClassIds(classIds, ReservationStatus.CANCELED).stream()
+                .collect(Collectors.toMap(r -> (Long) r[0], r -> (Long) r[1]));
+    }
 
     // ② 트레이너 내 그룹 수업 목록
     public TrainerGroupClassListResponse getMyClasses(Long trainerId, String status,

@@ -46,8 +46,8 @@ public enum ErrorCode {
     CLASS_HAS_PARTICIPANTS(HttpStatus.CONFLICT, "신청한 회원이 있어 그룹 수업을 수정할 수 없습니다."),
     CLASS_HAS_RESERVATIONS(HttpStatus.CONFLICT, "예약 이력이 있는 그룹 수업은 삭제할 수 없습니다. 수업 취소 기능을 이용해 주세요."),
     CLASS_NOT_CANCELABLE(HttpStatus.CONFLICT, "이미 취소되었거나 시작된 그룹 수업은 취소할 수 없습니다."),
-    CANCEL_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "취소 사유를 입력해 주세요.");
-
+    CANCEL_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "취소 사유를 입력해 주세요."),
+    INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "조회 가능한 날짜 범위를 확인해 주세요.");
 
     private final HttpStatus status;
     private final String message;

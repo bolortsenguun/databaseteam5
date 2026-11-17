@@ -35,4 +35,16 @@ public interface PtReservationRepository extends JpaRepository<PtReservation, Lo
 
     // 수업의 특정 상태 예약들
     List<PtReservation> findByGroupClassIdAndStatus(Long groupClassId, ReservationStatus status);
+
+    // 이용권별 확보된 횟수 (예약·결과대기)
+    long countByPtPassIdAndStatusIn(Long ptPassId, Collection<ReservationStatus> statuses);
+
+    // 수업별 참여자 수 (특정 상태 제외)
+    @Query("select r.groupClass.id, count(r) from PtReservation r " +
+            "where r.groupClass.id in :classIds and r.status <> :status group by r.groupClass.id")
+    List<Object[]> countByGroupClassIds(@Param("classIds") Collection<Long> classIds,
+                                        @Param("status") ReservationStatus status);
+
+    // 회원의 기간 내 예약 전부 (취소 포함)
+    List<PtReservation> findByUserIdAndLessonDateBetween(Long userId, LocalDate start, LocalDate end);
 }

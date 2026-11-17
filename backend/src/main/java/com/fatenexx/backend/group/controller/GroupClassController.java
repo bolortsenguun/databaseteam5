@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import com.fatenexx.backend.group.dto.GroupClassCancelRequest;
 import com.fatenexx.backend.group.dto.GroupClassCancelResponse;
 import com.fatenexx.backend.group.dto.GroupClassUpdateRequest;
+import com.fatenexx.backend.group.dto.MemberGroupClassListResponse;
 
 @RestController
 @RequiredArgsConstructor
@@ -27,6 +28,17 @@ public class GroupClassController {
 
     private final GroupClassService groupClassService;
 
+
+    // ① 회원용 그룹 수업 목록
+    @Roles(Role.MEMBER)
+    @GetMapping("/api/v1/group-classes")
+    public ApiResponse<MemberGroupClassListResponse> getClassesForMember(
+            @Login LoginUser loginUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ApiResponse.ok(groupClassService.getClassesForMember(loginUser.userId(), startDate, endDate),
+                "그룹 수업 목록을 조회했습니다.");
+    }
 
     // ② 트레이너 내 그룹 수업 목록
     @Roles(Role.TRAINER)
