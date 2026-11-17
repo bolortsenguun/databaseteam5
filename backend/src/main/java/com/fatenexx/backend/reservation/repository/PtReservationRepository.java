@@ -14,4 +14,8 @@ public interface PtReservationRepository extends JpaRepository<PtReservation, Lo
             Long trainerId, ReservationStatus status, LocalDate date);
 
     boolean existsByTrainerIdAndLessonDateAndStatus(Long trainerId, LocalDate lessonDate, ReservationStatus status);
+
+    // 그날의 개인 PT 예약 (특정 상태 제외)
+    List<PtReservation> findByTrainerIdAndLessonDateAndGroupClassIsNullAndStatusNot(
+            Long trainerId, LocalDate lessonDate, ReservationStatus status);
 }

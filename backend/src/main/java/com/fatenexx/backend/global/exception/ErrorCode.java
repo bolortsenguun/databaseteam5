@@ -28,7 +28,7 @@ public enum ErrorCode {
     // Product
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 상품을 찾을 수 없습니다."),
 
-    // Trainer (A)
+    // Trainer
     TRAINER_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 트레이너를 찾을 수 없습니다."),
     SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "이미 등록된 근무 시간과 겹칩니다."),
     SCHEDULE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 근무 일정을 찾을 수 없습니다."),
@@ -36,8 +36,17 @@ public enum ErrorCode {
     DAY_OFF_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 휴무로 등록된 날짜입니다."),
     DAY_OFF_CONFLICT(HttpStatus.CONFLICT, "해당 날짜에 예약된 수업이 있어 휴무를 등록할 수 없습니다."),
     DAY_OFF_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 휴무일을 찾을 수 없습니다."),
-    ALREADY_APPROVED(HttpStatus.CONFLICT, "이미 승인된 트레이너입니다.");
+    ALREADY_APPROVED(HttpStatus.CONFLICT, "이미 승인된 트레이너입니다."),
 
+    // Group Class
+    INVALID_CLASS_DATE(HttpStatus.BAD_REQUEST, "그룹 수업을 개설할 수 없는 날짜입니다."),
+    TRAINER_UNAVAILABLE(HttpStatus.CONFLICT, "해당 시간에는 그룹 수업을 개설할 수 없습니다."),
+    CLASS_TIME_CONFLICT(HttpStatus.CONFLICT, "해당 시간에 다른 PT 예약 또는 그룹 수업이 있습니다."),
+    GROUP_CLASS_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 그룹 수업을 찾을 수 없습니다."),
+    CLASS_HAS_PARTICIPANTS(HttpStatus.CONFLICT, "신청한 회원이 있어 그룹 수업을 수정할 수 없습니다."),
+    CLASS_HAS_RESERVATIONS(HttpStatus.CONFLICT, "예약 이력이 있는 그룹 수업은 삭제할 수 없습니다. 수업 취소 기능을 이용해 주세요."),
+    CLASS_NOT_CANCELABLE(HttpStatus.CONFLICT, "이미 취소되었거나 시작된 그룹 수업은 취소할 수 없습니다."),
+    CANCEL_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "취소 사유를 입력해 주세요.");
 
 
     private final HttpStatus status;
