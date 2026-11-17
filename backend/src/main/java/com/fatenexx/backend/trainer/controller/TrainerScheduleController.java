@@ -41,4 +41,14 @@ public class TrainerScheduleController {
                 .body(ApiResponse.ok(trainerScheduleService.addSchedule(loginUser, trainerId, request),
                         "근무 일정이 등록되었습니다."));
     }
+
+    // ⑧ 근무 일정 삭제
+    @Roles({Role.TRAINER, Role.ADMIN})
+    @DeleteMapping("/schedules/{scheduleId}")
+    public ApiResponse<Void> deleteSchedule(@Login LoginUser loginUser,
+                                            @PathVariable Long trainerId,
+                                            @PathVariable Long scheduleId) {
+        trainerScheduleService.deleteSchedule(loginUser, trainerId, scheduleId);
+        return ApiResponse.ok(null, "근무 일정이 삭제되었습니다.");
+    }
 }

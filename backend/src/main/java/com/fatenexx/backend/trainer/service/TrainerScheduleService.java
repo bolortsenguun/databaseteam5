@@ -18,6 +18,13 @@ import com.fatenexx.backend.trainer.dto.ScheduleCreateRequest;
 import com.fatenexx.backend.trainer.dto.ScheduleCreateResponse;
 import com.fatenexx.backend.trainer.entity.TrainerSchedule;
 import java.util.List;
+import com.fatenexx.backend.group.entity.GroupClassStatus;
+import com.fatenexx.backend.group.repository.GroupClassRepository;
+import com.fatenexx.backend.reservation.entity.ReservationStatus;
+import com.fatenexx.backend.reservation.repository.PtReservationRepository;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +34,8 @@ public class TrainerScheduleService {
     private final UserRepository userRepository;
     private final TrainerScheduleRepository scheduleRepository;
     private final TrainerDayOffRepository dayOffRepository;
+    private final PtReservationRepository reservationRepository;
+    private final GroupClassRepository groupClassRepository;
 
     // ⑥ 근무 일정 조회
     public TrainerScheduleResponse getSchedules(LoginUser loginUser, Long trainerId) {
@@ -66,6 +75,21 @@ public class TrainerScheduleService {
         return ScheduleCreateResponse.from(saved, trainerId);
     }
 
+    // ⑧ 근무 일정 삭제
+    @Transactional
+    public void deleteSchedule(LoginUser loginUser, Long trainerId, Long scheduleId) {
+        checkAccess(loginUser, trainerId);
+
+        TrainerSchedule schedule = scheduleRepository.findById(scheduleId)
+                .filter(s -> s.getTrainer().getId().equals(trainerId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCHEDULE_NOT_FOUND));
+
+        if (hasBookingsInSchedule(trainerId, schedule)) {
+            throw new BusinessException(ErrorCode.SCHEDULE_HAS_BOOKINGS);
+        }
+        scheduleRepository.delete(schedule);
+    }
+
     // 트레이너는 본인만, 관리자는 누구나
     private void checkAccess(LoginUser loginUser, Long trainerId) {
         if (loginUser.role() == Role.TRAINER && !loginUser.userId().equals(trainerId)) {
@@ -86,5 +110,30 @@ public class TrainerScheduleService {
             throw new BusinessException(ErrorCode.TRAINER_NOT_FOUND);
         }
         return trainer;
+    }
+    // 이 근무 시간에 앞으로 잡힌 예약·그룹 수업이 있는지 (BR-TRN-03)
+    private boolean hasBookingsInSchedule(Long trainerId, TrainerSchedule schedule) {
+        LocalDate today = LocalDate.now();
+
+        boolean hasReservation = reservationRepository
+                .findByTrainerIdAndStatusAndLessonDateGreaterThanEqual(trainerId, ReservationStatus.RESERVED, today)
+                .stream()
+                .anyMatch(r -> isInSchedule(schedule, r.getLessonDate(), r.getStartTime(), r.getEndTime()));
+        if (hasReservation) {
+            return true;
+        }
+
+        return groupClassRepository
+                .findByTrainerIdAndStatusInAndClassDateGreaterThanEqual(
+                        trainerId, List.of(GroupClassStatus.OPEN, GroupClassStatus.CONFIRMED), today)
+                .stream()
+                .anyMatch(g -> isInSchedule(schedule, g.getClassDate(), g.getStartTime(), g.getEndTime()));
+    }
+
+    // 그 날짜가 근무 요일이고, 시간이 근무 시간과 겹치는지
+    private boolean isInSchedule(TrainerSchedule s, LocalDate date, LocalTime start, LocalTime end) {
+        return date.getDayOfWeek().getValue() == s.getDayOfWeek()
+                && start.isBefore(s.getEndTime())
+                && end.isAfter(s.getStartTime());
     }
 }
