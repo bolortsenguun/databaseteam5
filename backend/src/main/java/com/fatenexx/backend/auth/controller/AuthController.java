@@ -63,8 +63,16 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<AuthUserResponse> me(@Login LoginUser loginUser) {
-        User user = authService.getUser(loginUser.userId());
+    public ApiResponse<AuthUserResponse> me(@Login LoginUser loginUser, HttpServletRequest request) {
+        User user = authService.findUser(loginUser.userId()).orElse(null);
+        if (user == null) {
+            // 세션은 남아 있는데 계정이 삭제된 경우 (가입 거절된 트레이너 등)
+            HttpSession session = request.getSession(false);
+            if (session != null) session.invalidate();
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        // 승인 상태·비밀번호 변경 필요 여부가 바뀌었을 수 있으니 세션도 최신으로 맞춤
+        request.getSession().setAttribute(SessionConst.LOGIN_USER, toLoginUser(user));
         return ApiResponse.ok(AuthUserResponse.from(user), "로그인 상태입니다.");
     }
 
