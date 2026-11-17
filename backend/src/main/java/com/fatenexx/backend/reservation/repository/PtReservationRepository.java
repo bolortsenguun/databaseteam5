@@ -14,6 +14,7 @@ import java.util.Optional;
 import com.fatenexx.backend.product.entity.PtType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import java.time.LocalTime;
 
 public interface PtReservationRepository extends JpaRepository<PtReservation, Long> {
 
@@ -106,4 +107,10 @@ public interface PtReservationRepository extends JpaRepository<PtReservation, Lo
                                        @Param("end") LocalDate end,
                                        Pageable pageable);
 
+    // 스케줄러: 종료 시각이 지난 특정 상태 예약
+    @Query("select r from PtReservation r where r.status = :status " +
+            "and (r.lessonDate < :today or (r.lessonDate = :today and r.endTime <= :now))")
+    List<PtReservation> findEnded(@Param("status") ReservationStatus status,
+                                  @Param("today") LocalDate today,
+                                  @Param("now") LocalTime now);
 }

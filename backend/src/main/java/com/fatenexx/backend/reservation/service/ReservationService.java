@@ -264,6 +264,16 @@ public class ReservationService {
                 page, size, result.getTotalElements(), result.getTotalPages());
     }
 
+    // 스케줄러: 종료된 예약 → 결과대기 (BR-CNL-03)
+    @Transactional
+    public int markEndedAsPending() {
+        LocalDateTime now = LocalDateTime.now();
+        List<PtReservation> ended = reservationRepository.findEnded(
+                ReservationStatus.RESERVED, now.toLocalDate(), now.toLocalTime());
+        ended.forEach(PtReservation::markPendingResult);
+        return ended.size();
+    }
+
     private void validateCancelReason(String reason) {
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(ErrorCode.CANCEL_REASON_REQUIRED);

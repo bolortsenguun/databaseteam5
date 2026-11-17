@@ -12,6 +12,7 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
 import java.util.Optional;
+import java.time.LocalTime;
 
 public interface GroupClassRepository extends JpaRepository<GroupClass, Long> {
 
@@ -40,4 +41,12 @@ public interface GroupClassRepository extends JpaRepository<GroupClass, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select g from GroupClass g where g.id = :id")
     Optional<GroupClass> findByIdForUpdate(@Param("id") Long id);
+
+    // 스케줄러: 시작 시각이 기준 시각 이전인 특정 상태 수업 (행 잠금)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select g from GroupClass g where g.status = :status " +
+            "and (g.classDate < :date or (g.classDate = :date and g.startTime <= :time))")
+    List<GroupClass> findDueForDecision(@Param("status") GroupClassStatus status,
+                                        @Param("date") LocalDate date,
+                                        @Param("time") LocalTime time);
 }

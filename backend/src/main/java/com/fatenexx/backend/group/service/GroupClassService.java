@@ -165,6 +165,32 @@ public class GroupClassService {
         }
         return GroupReservationResponse.of(r, current + 1);
     }
+    public record DecisionResult(int confirmed, int closed) {
+    }
+
+    // 스케줄러: 시작 24시간 전이 된 개설 수업 확정·폐강 (BR-GRP-13)
+    @Transactional
+    public DecisionResult decideDueClasses() {
+        LocalDateTime limit = LocalDateTime.now().plusHours(settingService.getInt(SettingKey.GROUP_CONFIRM_HOURS));
+        int min = settingService.getInt(SettingKey.GROUP_MIN_PARTICIPANTS);
+        int confirmed = 0;
+        int closed = 0;
+        for (GroupClass g : groupClassRepository.findDueForDecision(
+                GroupClassStatus.OPEN, limit.toLocalDate(), limit.toLocalTime())) {
+            long count = reservationRepository.countByGroupClassIdAndStatusNot(g.getId(), ReservationStatus.CANCELED);
+            if (count >= min) {
+                g.confirm();
+                confirmed++;
+            } else {
+                g.close();
+                reservationRepository.findByGroupClassIdAndStatus(g.getId(), ReservationStatus.RESERVED)
+                        .forEach(r -> r.cancel(CanceledBy.CLASS_CLOSED, null, false));   // 차감 없음
+                closed++;
+            }
+        }
+        return new DecisionResult(confirmed, closed);
+    }
+
 
     // ② 트레이너 내 그룹 수업 목록
     public TrainerGroupClassListResponse getMyClasses(Long trainerId, String status,
