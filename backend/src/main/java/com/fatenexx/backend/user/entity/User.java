@@ -91,4 +91,18 @@ public class User {
         this.passwordHash = temporaryPasswordHash;
         this.mustChangePassword = true;   // 초기화 후 다음 로그인 때 변경 강제 (BR-ACC-07)
     }
+
+    // 값이 null이면 바꾸지 않음
+    public void updateProfile(String name, String phone, LocalDate birthDate, Gender gender) {
+        if (name != null) this.name = name;
+        if (phone != null) this.phone = phone;
+        if (birthDate != null) this.birthDate = birthDate;
+        if (gender != null) this.gender = gender;
+    }
+
+    // 트레이너 경력·소개글. 빈 문자열("")을 보내면 삭제(NULL)
+    public void updateTrainerProfile(String career, String introduction) {
+        if (career != null) this.career = career.isBlank() ? null : career;
+        if (introduction != null) this.introduction = introduction.isBlank() ? null : introduction;
+    }
 }
