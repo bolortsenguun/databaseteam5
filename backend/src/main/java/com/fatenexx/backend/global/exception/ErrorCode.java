@@ -29,8 +29,8 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 상품을 찾을 수 없습니다."),
 
     // Trainer (A)
-    TRAINER_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 트레이너를 찾을 수 없습니다.");
-
+    TRAINER_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 트레이너를 찾을 수 없습니다."),
+    SCHEDULE_CONFLICT(HttpStatus.CONFLICT, "이미 등록된 근무 시간과 겹칩니다.");
 
 
     private final HttpStatus status;

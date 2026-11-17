@@ -14,7 +14,9 @@ import com.fatenexx.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.fatenexx.backend.trainer.dto.ScheduleCreateRequest;
+import com.fatenexx.backend.trainer.dto.ScheduleCreateResponse;
+import com.fatenexx.backend.trainer.entity.TrainerSchedule;
 import java.util.List;
 
 @Service
@@ -42,6 +44,28 @@ public class TrainerScheduleService {
         return new TrainerScheduleResponse(trainerId, schedules, daysOff);
     }
 
+    // ⑦ 근무 일정 추가
+    @Transactional
+    public ScheduleCreateResponse addSchedule(LoginUser loginUser, Long trainerId, ScheduleCreateRequest request) {
+        checkAccess(loginUser, trainerId);
+        User trainer = getApprovedTrainer(trainerId);
+
+        if (!request.endTime().isAfter(request.startTime())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "종료 시간은 시작 시간보다 늦어야 합니다.");
+        }
+
+        boolean overlaps = scheduleRepository
+                .existsByTrainerIdAndDayOfWeekAndStartTimeLessThanAndEndTimeGreaterThan(
+                        trainerId, request.dayOfWeek(), request.endTime(), request.startTime());
+        if (overlaps) {
+            throw new BusinessException(ErrorCode.SCHEDULE_CONFLICT);
+        }
+
+        TrainerSchedule saved = scheduleRepository.save(
+                TrainerSchedule.create(trainer, request.dayOfWeek(), request.startTime(), request.endTime()));
+        return ScheduleCreateResponse.from(saved, trainerId);
+    }
+
     // 트레이너는 본인만, 관리자는 누구나
     private void checkAccess(LoginUser loginUser, Long trainerId) {
         if (loginUser.role() == Role.TRAINER && !loginUser.userId().equals(trainerId)) {
@@ -53,5 +77,14 @@ public class TrainerScheduleService {
     private User getTrainer(Long trainerId) {
         return userRepository.findByIdAndRole(trainerId, Role.TRAINER)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
+    }
+
+    // 승인된 트레이너인지 확인 (승인대기면 404)
+    private User getApprovedTrainer(Long trainerId) {
+        User trainer = getTrainer(trainerId);
+        if (!trainer.isApproved()) {
+            throw new BusinessException(ErrorCode.TRAINER_NOT_FOUND);
+        }
+        return trainer;
     }
 }
