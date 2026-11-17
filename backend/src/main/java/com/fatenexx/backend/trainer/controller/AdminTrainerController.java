@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import com.fatenexx.backend.trainer.dto.TrainerApproveResponse;
 import com.fatenexx.backend.trainer.dto.TrainerRejectResponse;
+import com.fatenexx.backend.trainer.dto.AdminTrainerDetailResponse;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -39,5 +41,12 @@ public class AdminTrainerController {
     @PostMapping("/{trainerId}/reject")
     public ApiResponse<TrainerRejectResponse> reject(@PathVariable Long trainerId) {
         return ApiResponse.ok(trainerService.reject(trainerId), "트레이너 가입이 거절되었습니다.");
+    }
+
+    // ⑤ 관리자 트레이너 정보 수정
+    @PatchMapping("/{trainerId}")
+    public ApiResponse<AdminTrainerDetailResponse> update(@PathVariable Long trainerId,
+                                                          @RequestBody Map<String, Object> body) {
+        return ApiResponse.ok(trainerService.updateTrainer(trainerId, body), "트레이너 정보가 수정되었습니다.");
     }
 }

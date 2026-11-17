@@ -20,7 +20,10 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import com.fatenexx.backend.trainer.dto.TrainerApproveResponse;
 import com.fatenexx.backend.trainer.dto.TrainerRejectResponse;
+import com.fatenexx.backend.trainer.dto.AdminTrainerDetailResponse;
+import com.fatenexx.backend.user.entity.Gender;
 
+import java.util.Set;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -116,6 +119,94 @@ public class TrainerService {
     private User findTrainer(Long trainerId) {
         return userRepository.findByIdAndRole(trainerId, Role.TRAINER)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
+    }
+
+    // ⑤ 관리자 트레이너 정보 수정 (생략 = 유지, null = 삭제)
+    @Transactional
+    public AdminTrainerDetailResponse updateTrainer(Long trainerId, Map<String, Object> body) {
+        if (body == null || body.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "수정할 항목을 하나 이상 입력해 주세요.");
+        }
+        for (String key : body.keySet()) {
+            if (!EDITABLE_FIELDS.contains(key)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, key + "은(는) 수정할 수 없습니다.");
+            }
+        }
+        User t = findTrainer(trainerId);
+
+        String name = body.containsKey("name") ? requiredText(body.get("name"), 50, "이름") : t.getName();
+        String phone = body.containsKey("phone") ? parsePhone(body.get("phone")) : t.getPhone();
+        LocalDate birthDate = body.containsKey("birthDate") ? parseBirthDate(body.get("birthDate")) : t.getBirthDate();
+        Gender gender = body.containsKey("gender") ? parseGender(body.get("gender")) : t.getGender();
+        String career = body.containsKey("career") ? optionalText(body.get("career"), 200, "경력") : t.getCareer();
+        String introduction = body.containsKey("introduction")
+                ? optionalText(body.get("introduction"), 1000, "소개") : t.getIntroduction();
+
+        if (!phone.equals(t.getPhone()) && userRepository.existsByPhoneAndIdNot(phone, trainerId)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_PHONE);
+        }
+
+        t.updateTrainerInfo(name, phone, birthDate, gender, career, introduction);
+        return AdminTrainerDetailResponse.from(t);
+    }
+
+    private static final Set<String> EDITABLE_FIELDS =
+            Set.of("name", "phone", "birthDate", "gender", "career", "introduction");
+
+    // 필수 글자 (null·빈 값 불가)
+    private String requiredText(Object value, int max, String label) {
+        if (!(value instanceof String s) || s.isBlank() || s.length() > max) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, label + "은(는) 1~" + max + "자로 입력해 주세요.");
+        }
+        return s;
+    }
+
+    // 선택 글자 (null·빈 값이면 삭제)
+    private String optionalText(Object value, int max, String label) {
+        if (value == null) {
+            return null;
+        }
+        if (!(value instanceof String s) || s.length() > max) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, label + "은(는) 최대 " + max + "자입니다.");
+        }
+        return s.isBlank() ? null : s;
+    }
+
+    // 010 + 숫자 8자리
+    private String parsePhone(Object value) {
+        if (!(value instanceof String s) || !s.matches("^010\\d{8}$")) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "전화번호는 010으로 시작하는 숫자 11자리입니다.");
+        }
+        return s;
+    }
+
+    // YYYY-MM-DD, 미래 날짜 불가, null이면 삭제
+    private LocalDate parseBirthDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            LocalDate date = LocalDate.parse((String) value);
+            if (date.isAfter(LocalDate.now())) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "생년월일은 미래 날짜일 수 없습니다.");
+            }
+            return date;
+        } catch (ClassCastException | java.time.format.DateTimeParseException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "생년월일은 YYYY-MM-DD 형식입니다.");
+        }
+    }
+
+    // "남" / "여", null이면 삭제
+    private Gender parseGender(Object value) {
+        if (value == null) {
+            return null;
+        }
+        for (Gender g : Gender.values()) {
+            if (g.getLabel().equals(value)) {
+                return g;
+            }
+        }
+        throw new BusinessException(ErrorCode.INVALID_INPUT, "성별은 남 또는 여입니다.");
     }
 
     // "전체"·null → 필터 없음, "승인대기" / "승인" → 해당 상태, 그 외 → 400

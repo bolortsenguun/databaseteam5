@@ -110,4 +110,16 @@ public class User {
     public void approve() {
         this.approvalStatus = ApprovalStatus.APPROVED;
     }
+
+
+    // 관리자 트레이너 정보 수정: 받은 값으로 전부 교체 (생략 처리는 서비스에서 함)
+    public void updateTrainerInfo(String name, String phone, LocalDate birthDate, Gender gender,
+                                  String career, String introduction) {
+        this.name = name;
+        this.phone = phone;
+        this.birthDate = birthDate;
+        this.gender = gender;
+        this.career = career;
+        this.introduction = introduction;
+    }
 }
