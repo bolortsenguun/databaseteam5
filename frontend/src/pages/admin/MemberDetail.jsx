@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { members, reservations, payments, auth } from '../../api/endpoints'
+import { members, reservations, payments, attendance, auth } from '../../api/endpoints'
 import { useAsync, useSafeAsync } from '../../lib/hooks'
 import { Async, Badge, Confirm, Empty, Field, Modal, Seg, useToast } from '../../components/ui'
 import { PhoneInput, phoneError } from '../../components/inputs'
@@ -12,6 +12,7 @@ export default function AdminMemberDetail() {
   const m = useAsync(() => members.detail(uid), [uid])
   const res = useAsync(() => reservations.adminList({ userId: uid, page: 1, size: 8 }), [uid])
   const pay = useSafeAsync(() => payments.adminList({ userId: uid, page: 1, size: 8 }), null, [uid])
+  const att = useSafeAsync(() => attendance.adminList({ userId: uid, page: 1, size: 8 }), null, [uid])
   const [edit, setEdit] = useState(false)
   const [reset, setReset] = useState(false)
 
@@ -108,7 +109,14 @@ export default function AdminMemberDetail() {
         </section>
         <section className="card">
           <h3>출석</h3>
-          <span className="muted small">관리자 출석 API가 날짜별 조회만 지원해서 회원별 출석 기록은 아직 보여 줄 수 없어요. 출석 메뉴에서 날짜별로 확인해 주세요.</span>
+          {!att.data ? (att.loading ? null : <Empty>출석 기록을 불러오지 못했어요.</Empty>) : att.data.attendances.length === 0 ? <Empty>출석 기록이 없어요.</Empty> : (
+            <table className="tbl">
+              <thead><tr><th>체크인 시각</th><th>입장 구분</th></tr></thead>
+              <tbody>
+                {att.data.attendances.map(a => <tr key={a.attendanceId}><td className="small">{fmtDateTime(a.checkedInAt)}</td><td>{a.entryType === 'PT' ? 'PT 예약' : '회원권'}</td></tr>)}
+              </tbody>
+            </table>
+          )}
         </section>
       </div>
     </main>

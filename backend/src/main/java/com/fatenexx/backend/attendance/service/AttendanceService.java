@@ -145,18 +145,46 @@ public class AttendanceService {
         return new AttendancePageResponse(items, page, size, result.getTotalElements(), result.getTotalPages());
     }
 
-    /** 관리자: 하루치 입장 기록 (date 생략 시 오늘) */
+    /**
+     * 관리자 출석 검색. date를 주면 그 하루, 아니면 startDate~endDate (둘 다 없으면 전체 기간).
+     * userId·entryType(회원권/PT)으로 거를 수 있고, page는 1부터.
+     */
     @Transactional(readOnly = true)
-    public AdminAttendanceListResponse getAttendancesByDate(LocalDate date) {
-        LocalDate d = (date == null) ? LocalDate.now(KST) : date;
-        List<AdminAttendanceItemResponse> items = attendanceRepository
-                .findByDay(d.atStartOfDay(), d.plusDays(1).atStartOfDay()).stream()
+    public AdminAttendanceListResponse searchForAdmin(LocalDate date, LocalDate startDate, LocalDate endDate,
+                                                      Long userId, String entryType, int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "page는 1 이상, size는 1~100 이어야 합니다.");
+        }
+        LocalDate from = date != null ? date : startDate;
+        LocalDate to = date != null ? date : endDate;
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "시작일이 종료일보다 늦을 수 없습니다.");
+        }
+
+        Page<Attendance> result = attendanceRepository.searchForAdmin(
+                userId,
+                parseEntryType(entryType),
+                from == null ? null : from.atStartOfDay(),
+                to == null ? null : to.plusDays(1).atStartOfDay(),     // 종료일 하루 전체 포함
+                PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "checkedInAt")));
+
+        List<AdminAttendanceItemResponse> items = result.getContent().stream()
                 .map(a -> new AdminAttendanceItemResponse(a.getId(), a.getUser().getId(),
                         a.getUser().getName(), a.getUser().getPhone(), a.getCheckedInAt(),
                         a.getEntryType().getLabel(),
                         a.getReservation() == null ? null : a.getReservation().getId()))
                 .toList();
-        return new AdminAttendanceListResponse(d, items.size(), items);
+        return new AdminAttendanceListResponse(items, page, size, result.getTotalElements(), result.getTotalPages());
+    }
+
+    // 회원권/PT (MEMBERSHIP/PT도 받음). 없거나 전체면 null(조건 없음)
+    private EntryType parseEntryType(String value) {
+        if (value == null || value.isBlank() || value.equals("전체")) return null;
+        try {
+            return EntryType.fromJson(value);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "entryType은 회원권 또는 PT여야 합니다.");
+        }
     }
 
     /** 홍길동 → 홍*동, 이수 → 이* */

@@ -24,7 +24,15 @@ public class AdminAttendanceController {
 
     @GetMapping
     public ApiResponse<AdminAttendanceListResponse> list(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ApiResponse.ok(attendanceService.getAttendancesByDate(date), "조회되었습니다.");
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String entryType,       // 회원권 / PT (없으면 전체)
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(
+                attendanceService.searchForAdmin(date, startDate, endDate, userId, entryType, page, size),
+                "조회되었습니다.");
     }
 }

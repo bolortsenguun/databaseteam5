@@ -53,16 +53,8 @@ export const attendance = {
     const d = await get('/attendances/me', { from: startDate, to: endDate, startDate, endDate, page: page ?? 1, size })
     return normalizeAttendancePage(d, true)
   },
-  adminList: async query => {
-    const { date, startDate, endDate, entryType, userId, page = 1, size = 20 } = query || {}
-    const day = date || (startDate && startDate === endDate ? startDate : startDate || endDate)
-    const d = normalizeAttendancePage(await get('/admin/attendances', { date: day, startDate, endDate, entryType, userId, page, size }), true)
-    if (d.totalPages > 1 || (d.size && d.size < d.totalCount)) return d
-    const list = d.attendances.filter(a => (!entryType || entryType === '전체' || a.entryType === entryType) && (!userId || a.userId === Number(userId)))
-    const s = Number(size)
-    const p = Number(page)
-    return { attendances: list.slice((p - 1) * s, p * s), page: p, size: s, totalCount: list.length, totalPages: Math.max(1, Math.ceil(list.length / s)), singleDay: true }
-  }
+  // 날짜(하루)·기간·회원·입장 구분 검색과 페이지를 서버에서 처리 (page는 1부터)
+  adminList: async query => normalizeAttendancePage(await get('/admin/attendances', query), true)
 }
 
 const safe = p => p.catch(() => null)
