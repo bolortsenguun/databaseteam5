@@ -2,9 +2,11 @@ package com.fatenexx.backend.statistics.service;
 
 import com.fatenexx.backend.global.exception.BusinessException;
 import com.fatenexx.backend.global.exception.ErrorCode;
+import com.fatenexx.backend.global.auth.Role;
 import com.fatenexx.backend.group.entity.GroupClassStatus;
 import com.fatenexx.backend.payment.entity.PaymentStatus;
 import com.fatenexx.backend.reservation.entity.ReservationStatus;
+import com.fatenexx.backend.user.entity.ApprovalStatus;
 import com.fatenexx.backend.setting.SettingKey;
 import com.fatenexx.backend.setting.service.SettingService;
 import com.fatenexx.backend.statistics.dto.*;
@@ -47,7 +49,11 @@ public class StatisticsService {
                 statisticsRepository.countReservationsByStatus(ReservationStatus.PENDING_RESULT),
                 statisticsRepository.countClosingSoonClasses(today, minParticipants,
                         GroupClassStatus.OPEN, ReservationStatus.CANCELED),
-                statisticsRepository.sumRevenue(PaymentStatus.SUCCESS, start, end));
+                statisticsRepository.sumRevenue(PaymentStatus.SUCCESS, start, end),
+                statisticsRepository.sumRevenue(PaymentStatus.SUCCESS, today.withDayOfMonth(1).atStartOfDay(), end),
+                statisticsRepository.countUsers(Role.MEMBER, null),
+                statisticsRepository.countUsers(Role.TRAINER, ApprovalStatus.APPROVED),
+                statisticsRepository.countUsers(Role.TRAINER, ApprovalStatus.PENDING));
     }
 
     /** 관리자 통계 (기간 생략 시 이번 달 1일 ~ 오늘) */
@@ -75,29 +81,39 @@ public class StatisticsService {
                 buildTrainerPerformance(f, t), buildHourlyEntries(start, end));
     }
 
-    /** (트레이너, 상태, 건수) 행들을 트레이너별 한 줄로 합친다 */
+    /** (트레이너, 상태, 건수) 행들을 트레이너별 한 줄로 합친다. 개인·그룹을 따로 센다 */
     private List<TrainerPerformanceItem> buildTrainerPerformance(LocalDate from, LocalDate to) {
         Map<Long, String> names = new LinkedHashMap<>();
-        Map<Long, long[]> counts = new LinkedHashMap<>();   // [출석, 결석, 취소, 예정]
+        // [출석, 결석, 취소, 예정, 개인출석, 개인결석, 그룹출석, 그룹결석]
+        Map<Long, long[]> counts = new LinkedHashMap<>();
 
-        for (Object[] row : statisticsRepository.trainerReservationCounts(from, to)) {
-            Long trainerId = ((Number) row[0]).longValue();
-            names.put(trainerId, (String) row[1]);
-            ReservationStatus status = (ReservationStatus) row[2];
-            long count = ((Number) row[3]).longValue();
+        for (boolean group : new boolean[]{false, true}) {
+            for (Object[] row : statisticsRepository.trainerReservationCounts(from, to, group)) {
+                Long trainerId = ((Number) row[0]).longValue();
+                names.put(trainerId, (String) row[1]);
+                ReservationStatus status = (ReservationStatus) row[2];
+                long count = ((Number) row[3]).longValue();
 
-            long[] arr = counts.computeIfAbsent(trainerId, k -> new long[4]);
-            switch (status) {
-                case ATTENDED -> arr[0] += count;
-                case ABSENT -> arr[1] += count;
-                case CANCELED -> arr[2] += count;
-                default -> arr[3] += count;      // 예약, 결과대기
+                long[] arr = counts.computeIfAbsent(trainerId, k -> new long[8]);
+                switch (status) {
+                    case ATTENDED -> { arr[0] += count; arr[group ? 6 : 4] += count; }
+                    case ABSENT -> { arr[1] += count; arr[group ? 7 : 5] += count; }
+                    case CANCELED -> arr[2] += count;
+                    default -> arr[3] += count;      // 예약, 결과대기
+                }
             }
         }
 
+        Map<Long, Long> held = new LinkedHashMap<>();
+        for (Object[] row : statisticsRepository.trainerGroupClassesHeld(from, to, GroupClassStatus.CONFIRMED)) {
+            held.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+        }
+
         List<TrainerPerformanceItem> result = new ArrayList<>();
-        counts.forEach((id, arr) ->
-                result.add(new TrainerPerformanceItem(id, names.get(id), arr[0], arr[1], arr[2], arr[3])));
+        counts.forEach((id, a) -> result.add(new TrainerPerformanceItem(id, names.get(id),
+                a[0], a[1], a[2], a[3],
+                a[4], a[5], held.getOrDefault(id, 0L), a[6], a[7],
+                a[0] + a[1])));
         return result;
     }
 
