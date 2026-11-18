@@ -22,4 +22,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     // 내 회원권 목록 (최신 시작일 순)
     @EntityGraph(attributePaths = "product")
     List<Membership> findByUserIdOrderByStartDateDescIdDesc(Long userId);
+
+    // 오늘 유효한 회원권이 있는지 (시작일 <= 오늘 <= 종료일). 호출: (userId, today, today)
+    boolean existsByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            Long userId, LocalDate start, LocalDate end);
 }

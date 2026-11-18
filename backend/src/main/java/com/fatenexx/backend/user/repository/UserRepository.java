@@ -20,6 +20,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByPhone(String phone);
 
+    // 키오스크 체크인: 전화번호로 회원 찾기
+    Optional<User> findByPhone(String phone);
+
     // 본인을 제외하고 같은 전화번호가 있는지 (내 정보 수정 시 중복 검사)
     boolean existsByPhoneAndIdNot(String phone, Long id);
 
@@ -35,7 +38,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
                             @Param("keyword") String keyword,
                             Pageable pageable);
 
-    // 결제 시 같은 회원의 동시 구매를 막기 위해 회원 행을 잠그고 조회
+    // 결제·체크인 시 같은 회원의 동시 요청을 막기 위해 회원 행을 잠그고 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);

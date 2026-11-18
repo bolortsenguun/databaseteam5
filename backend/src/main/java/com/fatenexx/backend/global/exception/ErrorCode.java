@@ -29,6 +29,7 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 상품을 찾을 수 없습니다."),
     PRODUCT_NOT_ACTIVE(HttpStatus.CONFLICT, "판매가 중지된 상품입니다."),
     INVALID_START_DATE(HttpStatus.BAD_REQUEST, "선택할 수 없는 시작일입니다."),
+    ENTRY_NOT_ALLOWED(HttpStatus.FORBIDDEN, "입장할 수 없습니다."),
 
 
     // Trainer
