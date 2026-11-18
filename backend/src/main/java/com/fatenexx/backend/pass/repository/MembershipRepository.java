@@ -18,4 +18,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
 
     @EntityGraph(attributePaths = "product")
     List<Membership> findByPaymentIn(Collection<Payment> payments);
+
+    // 내 회원권 목록 (최신 시작일 순)
+    @EntityGraph(attributePaths = "product")
+    List<Membership> findByUserIdOrderByStartDateDescIdDesc(Long userId);
 }
