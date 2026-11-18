@@ -49,7 +49,7 @@ public class PaymentService {
     private final UserRepository userRepository;
     private final SettingService settingService;
 
-    private record PassInfo(PurchaseType type, String productName, LocalDate start, LocalDate end) {
+    private record PassInfo(PurchaseType type, PtType ptType, String productName, LocalDate start, LocalDate end) {
     }
 
     /** 모의 결제 + 이용권 생성 (회원 본인) */
@@ -141,7 +141,7 @@ public class PaymentService {
         List<PaymentItemResponse> items = result.getContent().stream().map(p -> {
             PassInfo i = info.get(p.getId());
             return new PaymentItemResponse(p.getId(), p.getStatus().getLabel(), p.getAmount(), p.getPaidAt(),
-                    i == null ? null : i.type(), i == null ? null : i.productName(),
+                    i == null ? null : i.type(), i == null ? null : i.ptType(), i == null ? null : i.productName(),
                     i == null ? null : i.start(), i == null ? null : i.end());
         }).toList();
 
@@ -169,7 +169,7 @@ public class PaymentService {
             PassInfo i = info.get(p.getId());
             return new AdminPaymentItemResponse(p.getId(), p.getUser().getId(), p.getUser().getLoginId(),
                     p.getUser().getName(), p.getStatus().getLabel(), p.getAmount(), p.getPaidAt(),
-                    i == null ? null : i.type(), i == null ? null : i.productName(),
+                    i == null ? null : i.type(), i == null ? null : i.ptType(), i == null ? null : i.productName(),
                     i == null ? null : i.start(), i == null ? null : i.end());
         }).toList();
 
@@ -199,11 +199,11 @@ public class PaymentService {
             return map;
         }
         for (Membership m : membershipRepository.findByPaymentIn(payments)) {
-            map.put(m.getPayment().getId(), new PassInfo(PurchaseType.MEMBERSHIP,
+            map.put(m.getPayment().getId(), new PassInfo(PurchaseType.MEMBERSHIP, null,
                     m.getProduct().getName(), m.getStartDate(), m.getEndDate()));
         }
         for (PtPass p : ptPassRepository.findByPaymentIn(payments)) {
-            map.put(p.getPayment().getId(), new PassInfo(PurchaseType.PT,
+            map.put(p.getPayment().getId(), new PassInfo(PurchaseType.PT, p.getPtType(),
                     p.getProduct().getName(), p.getStartDate(), p.getEndDate()));
         }
         return map;

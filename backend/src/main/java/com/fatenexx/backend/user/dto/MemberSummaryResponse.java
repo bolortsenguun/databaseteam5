@@ -1,12 +1,13 @@
 package com.fatenexx.backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fatenexx.backend.user.entity.Gender;
 import com.fatenexx.backend.user.entity.User;
 
 import java.time.LocalDateTime;
 
 public record MemberSummaryResponse(
-        Long userId, String loginId, String name, String phone, Gender gender, LocalDateTime createdAt,
+        Long userId, String loginId, String name, String phone, Gender gender, @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime createdAt,
         String membershipStatus     // 이용중 / 미이용 (오늘 유효한 회원권 기준)
 ) {
     public static final String ACTIVE = "이용중";

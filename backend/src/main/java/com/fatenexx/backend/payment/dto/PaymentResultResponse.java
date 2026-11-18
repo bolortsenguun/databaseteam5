@@ -1,5 +1,6 @@
 package com.fatenexx.backend.payment.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fatenexx.backend.payment.entity.Payment;
 
 import java.time.LocalDate;
@@ -9,7 +10,7 @@ public record PaymentResultResponse(
         Long paymentId,
         String status,
         int amount,
-        LocalDateTime paidAt,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime paidAt,
         PurchaseType purchaseType,
         String productName,
         LocalDate startDate,

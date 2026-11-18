@@ -1,5 +1,6 @@
 package com.fatenexx.backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fatenexx.backend.global.auth.Role;
 import com.fatenexx.backend.user.entity.ApprovalStatus;
 import com.fatenexx.backend.user.entity.Gender;
@@ -11,7 +12,7 @@ import java.time.LocalDateTime;
 public record UserResponse(
         Long userId, String loginId, String name, String phone,
         LocalDate birthDate, Gender gender, Role role, ApprovalStatus approvalStatus,
-        String career, String introduction, LocalDateTime createdAt
+        String career, String introduction, @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime createdAt
 ) {
     public static UserResponse from(User u) {
         return new UserResponse(u.getId(), u.getLoginId(), u.getName(), u.getPhone(),

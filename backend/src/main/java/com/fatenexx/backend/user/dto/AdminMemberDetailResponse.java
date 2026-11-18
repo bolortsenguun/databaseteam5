@@ -1,5 +1,6 @@
 package com.fatenexx.backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fatenexx.backend.attendance.dto.AttendanceItemResponse;
 import com.fatenexx.backend.global.auth.Role;
 import com.fatenexx.backend.pass.dto.MembershipItemResponse;
@@ -17,7 +18,7 @@ import java.util.List;
 public record AdminMemberDetailResponse(
         Long userId, String loginId, String name, String phone,
         LocalDate birthDate, Gender gender, Role role, ApprovalStatus approvalStatus,
-        LocalDateTime createdAt,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime createdAt,
         List<MembershipItemResponse> memberships,
         List<PtPassItemResponse> ptPasses,
         List<AttendanceItemResponse> recentAttendances     // 최근 10건, 최신순
