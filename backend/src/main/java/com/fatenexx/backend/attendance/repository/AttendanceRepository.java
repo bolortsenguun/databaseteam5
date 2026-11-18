@@ -20,6 +20,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     Page<Attendance> findByUserIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThan(
             Long userId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
+    // 관리자 회원 상세: 최근 입장 기록 10건
+    List<Attendance> findTop10ByUserIdOrderByCheckedInAtDesc(Long userId);
+
     // 관리자: 하루치 입장 기록 (회원 정보 포함)
     @Query("select a from Attendance a join fetch a.user " +
             "where a.checkedInAt >= :from and a.checkedInAt < :to " +

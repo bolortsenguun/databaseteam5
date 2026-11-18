@@ -3,9 +3,9 @@ package com.fatenexx.backend.user.controller;
 import com.fatenexx.backend.global.auth.Role;
 import com.fatenexx.backend.global.auth.Roles;
 import com.fatenexx.backend.global.response.ApiResponse;
+import com.fatenexx.backend.user.dto.AdminMemberDetailResponse;
 import com.fatenexx.backend.user.dto.MemberListResponse;
 import com.fatenexx.backend.user.dto.UpdateProfileRequest;
-import com.fatenexx.backend.user.dto.UserResponse;
 import com.fatenexx.backend.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,12 +30,12 @@ public class AdminMemberController {
     }
 
     @GetMapping("/{userId}")
-    public ApiResponse<UserResponse> getMember(@PathVariable Long userId) {
+    public ApiResponse<AdminMemberDetailResponse> getMember(@PathVariable Long userId) {
         return ApiResponse.ok(userService.getMember(userId), "회원 정보를 조회했습니다.");
     }
 
     @PatchMapping("/{userId}")
-    public ApiResponse<UserResponse> updateMember(@PathVariable Long userId,
+    public ApiResponse<AdminMemberDetailResponse> updateMember(@PathVariable Long userId,
                                                   @Valid @RequestBody UpdateProfileRequest request) {
         return ApiResponse.ok(userService.updateMember(userId, request), "회원 정보가 수정되었습니다.");
     }
