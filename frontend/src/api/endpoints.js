@@ -111,6 +111,7 @@ export const settings = {
 export const trainers = {
   list: () => get('/trainers'),
   adminList: query => get('/admin/trainers', query),
+  adminDetail: id => get(`/admin/trainers/${id}`),
   approve: id => post(`/admin/trainers/${id}/approve`),
   reject: id => post(`/admin/trainers/${id}/reject`),
   adminUpdate: (id, body) => patch(`/admin/trainers/${id}`, body),
