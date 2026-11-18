@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { trainers } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
 import { Async, Confirm, Field, Modal, PageTitle, Seg, Tabs, useToast } from '../../components/ui'
@@ -6,7 +6,7 @@ import { PhoneInput, phoneError } from '../../components/inputs'
 import ScheduleManager from '../../components/ScheduleManager'
 import { ResetPassword } from './MemberDetail'
 import { workText } from '../member/Trainers'
-import { fmtDate, fmtPhone, today } from '../../lib/format'
+import { fmtDate, fmtPhone, genderKey, today } from '../../lib/format'
 
 export default function AdminTrainers() {
   const toast = useToast()
@@ -111,6 +111,21 @@ function EditTrainer({ t, onClose, onSaved, onScheduleChanged }) {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [reset, setReset] = useState(false)
+  // 현재 값 불러오기: 'loading' → 성공하면 원래 값 객체, 실패하면 null (입력한 항목만 바꾸는 방식으로 동작)
+  const [orig, setOrig] = useState('loading')
+  useEffect(() => {
+    let alive = true
+    trainers.adminDetail(t.trainerId)
+      .then(d => {
+        if (!alive) return
+        const o = { birthDate: d.birthDate || '', gender: genderKey(d.gender), career: d.career || '', introduction: d.introduction || '' }
+        setOrig(o)
+        setF(s => ({ ...s, ...o }))
+      })
+      .catch(() => { if (alive) setOrig(null) })
+    return () => { alive = false }
+  }, [t.trainerId])
+  const loaded = orig && orig !== 'loading'
   const set = (k, v) => { setF(s => ({ ...s, [k]: v })); setTouched(s => ({ ...s, [k]: true })); setErrs(e => ({ ...e, [k]: '' })) }
 
   const save = async () => {
@@ -120,10 +135,18 @@ function EditTrainer({ t, onClose, onSaved, onScheduleChanged }) {
     const body = {}
     if (f.name.trim() !== t.name) body.name = f.name.trim()
     if (f.phone !== t.phone) body.phone = f.phone
-    if (touched.birthDate && f.birthDate) body.birthDate = f.birthDate
-    if (touched.gender && f.gender) body.gender = f.gender === 'MALE' ? '남' : '여'
-    if (touched.career) body.career = f.career.trim() || null
-    if (touched.introduction) body.introduction = f.introduction.trim() || null
+    if (loaded) {
+      // 원래 값과 달라진 항목만 보낸다. 비우면 null → 서버에서 지움
+      if (f.birthDate !== orig.birthDate) body.birthDate = f.birthDate || null
+      if (f.gender && f.gender !== orig.gender) body.gender = f.gender === 'MALE' ? '남' : '여'
+      if (f.career.trim() !== orig.career) body.career = f.career.trim() || null
+      if (f.introduction.trim() !== orig.introduction) body.introduction = f.introduction.trim() || null
+    } else {
+      if (touched.birthDate && f.birthDate) body.birthDate = f.birthDate
+      if (touched.gender && f.gender) body.gender = f.gender === 'MALE' ? '남' : '여'
+      if (touched.career) body.career = f.career.trim() || null
+      if (touched.introduction) body.introduction = f.introduction.trim() || null
+    }
     if (!Object.keys(body).length) return onClose()
     setBusy(true)
     setErr('')
@@ -142,18 +165,18 @@ function EditTrainer({ t, onClose, onSaved, onScheduleChanged }) {
   return (
     <Modal title={`${t.name} 트레이너`} onClose={() => { onScheduleChanged(); onClose() }} wide>
       <Tabs value={tab} options={[['info', '정보 수정'], ['schedule', '근무 시간']]} onChange={setTab} />
-      {tab === 'info' ? (
+      {tab === 'info' ? (orig === 'loading' ? <p className="muted small">트레이너 정보를 불러오는 중…</p> : (
         <>
           <Field label="아이디"><input className="input" value={t.loginId} disabled /></Field>
           <div className="grid g2" style={{ gap: 16 }}>
             <Field label="이름" error={errs.name}><input className="input" value={f.name} onChange={e => set('name', e.target.value)} /></Field>
             <Field label="전화번호" error={errs.phone}><PhoneInput value={f.phone} onChange={v => set('phone', v)} /></Field>
-            <Field label="생년월일" error={errs.birthDate} hint="바꿀 때만 입력"><input className="input" type="date" max={today()} value={f.birthDate} onChange={e => set('birthDate', e.target.value)} /></Field>
-            <div className="field">성별 <span className="hint">바꿀 때만 선택</span><Seg value={f.gender} options={[['MALE', '남'], ['FEMALE', '여']]} onChange={v => set('gender', v)} /></div>
+            <Field label="생년월일" error={errs.birthDate} hint={loaded ? '' : '바꿀 때만 입력'}><input className="input" type="date" max={today()} value={f.birthDate} onChange={e => set('birthDate', e.target.value)} /></Field>
+            <div className="field">성별 {!loaded && <span className="hint">바꿀 때만 선택</span>}<Seg value={f.gender} options={[['MALE', '남'], ['FEMALE', '여']]} onChange={v => set('gender', v)} /></div>
           </div>
-          <Field label="경력 (선택)" error={errs.career} hint="입력하면 덮어써요. 비워서 저장하면 지워져요."><input className="input" value={f.career} onChange={e => set('career', e.target.value)} placeholder={touched.career ? '' : '바꿀 때만 입력'} /></Field>
-          <Field label="소개글 (선택)" error={errs.introduction}><textarea className="textarea" value={f.introduction} onChange={e => set('introduction', e.target.value)} placeholder={touched.introduction ? '' : '바꿀 때만 입력'} /></Field>
-          <div className="alert small">관리자용 트레이너 상세 조회 API가 없어서 생년월일·성별·경력·소개의 현재 값은 보여 줄 수 없어요. 입력한 항목만 바뀌어요.</div>
+          <Field label="경력 (선택)" error={errs.career} hint="비워서 저장하면 지워져요."><input className="input" value={f.career} onChange={e => set('career', e.target.value)} placeholder={loaded || touched.career ? '' : '바꿀 때만 입력'} /></Field>
+          <Field label="소개글 (선택)" error={errs.introduction}><textarea className="textarea" value={f.introduction} onChange={e => set('introduction', e.target.value)} placeholder={loaded || touched.introduction ? '' : '바꿀 때만 입력'} /></Field>
+          {!loaded && <div className="alert small">트레이너 정보를 불러오지 못해서 생년월일·성별·경력·소개의 현재 값은 보여 줄 수 없어요. 입력한 항목만 바뀌어요.</div>}
           {err && <div className="alert bad">{err}</div>}
           <div className="row between">
             <button className="btn" onClick={() => setReset(true)}>비밀번호 초기화</button>
@@ -163,7 +186,7 @@ function EditTrainer({ t, onClose, onSaved, onScheduleChanged }) {
             </div>
           </div>
         </>
-      ) : (
+      )) : (
         <ScheduleManager trainerId={t.trainerId} compact />
       )}
       {reset && <ResetPassword userId={t.trainerId} name={t.name} onClose={() => setReset(false)} />}

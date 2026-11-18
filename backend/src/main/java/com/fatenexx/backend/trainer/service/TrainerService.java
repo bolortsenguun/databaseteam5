@@ -94,6 +94,11 @@ public class TrainerService {
         return new AdminTrainerListResponse(items, page, size, totalCount, totalPages);
     }
 
+    // 관리자 트레이너 단건 조회 (승인대기 포함)
+    public AdminTrainerDetailResponse getTrainerForAdmin(Long trainerId) {
+        return AdminTrainerDetailResponse.from(findTrainer(trainerId));
+    }
+
     // ③ 트레이너 가입 승인
     @Transactional
     public TrainerApproveResponse approve(Long trainerId) {

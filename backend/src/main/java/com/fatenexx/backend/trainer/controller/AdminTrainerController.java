@@ -30,6 +30,11 @@ public class AdminTrainerController {
                 "트레이너 목록을 조회했습니다.");
     }
 
+    // 관리자 트레이너 단건 조회 (정보 수정 창에 현재 값 불러오기용)
+    @GetMapping("/{trainerId}")
+    public ApiResponse<AdminTrainerDetailResponse> getTrainer(@PathVariable Long trainerId) {
+        return ApiResponse.ok(trainerService.getTrainerForAdmin(trainerId), "트레이너 정보를 조회했습니다.");
+    }
 
     // ③ 트레이너 가입 승인
     @PostMapping("/{trainerId}/approve")
