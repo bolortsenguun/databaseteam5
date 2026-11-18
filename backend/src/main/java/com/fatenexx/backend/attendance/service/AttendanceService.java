@@ -38,6 +38,7 @@ public class AttendanceService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
+    private static final String NO_PASS_MESSAGE = "입장 가능한 이용권이 없습니다. 데스크에 문의해 주세요.";
 
     private final AttendanceRepository attendanceRepository;
     private final UserRepository userRepository;
@@ -48,9 +49,11 @@ public class AttendanceService {
     /** 키오스크 체크인 (로그인 없이 전화번호로) */
     @Transactional
     public KioskCheckinResponse checkin(String phone) {
+        // 없는 번호·회원이 아닌 번호도 '이용권 없음'과 같은 403으로 답한다
+        // → 번호만 넣어 보고 회원인지 알아낼 수 없게 (처리 규칙 19번)
         User found = userRepository.findByPhone(phone)
                 .filter(u -> u.getRole() == Role.MEMBER)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "등록되지 않은 전화번호입니다."));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENTRY_NOT_ALLOWED, NO_PASS_MESSAGE));
 
         // 같은 회원이 동시에 두 번 눌러도 중복 기록되지 않도록 회원 행을 잠근다
         User user = userRepository.findByIdForUpdate(found.getId())
@@ -70,7 +73,15 @@ public class AttendanceService {
                     a.getCheckedInAt(), false, "이미 입장 처리되었습니다.");
         }
 
-        // 2) 오늘 PT 예약 중 입장 가능 시간대에 있는 것을 찾는다
+        // 2) 오늘 유효한 회원권이 있으면 회원권 입장 (회원권과 PT 예약이 둘 다 있어도 회원권 우선, 처리 규칙 9번)
+        if (membershipRepository.existsByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                user.getId(), today, today)) {
+            attendanceRepository.save(Attendance.create(user, EntryType.MEMBERSHIP, null));
+            return new KioskCheckinResponse(maskedName, "MEMBERSHIP", null,
+                    now, true, "입장이 처리되었습니다.");
+        }
+
+        // 3) 회원권이 없으면 오늘 PT 예약 중 입장 가능 시간대에 있는 것을 찾는다
         int before = settingService.getInt(SettingKey.PT_ENTRY_BEFORE_MINUTES);
         int after = settingService.getInt(SettingKey.PT_ENTRY_AFTER_MINUTES);
         List<PtReservation> todays = ptReservationRepository
@@ -100,21 +111,12 @@ public class AttendanceService {
                     now, true, "PT 수업 입장이 처리되었습니다.");
         }
 
-        // 3) 오늘 유효한 회원권이 있으면 회원권 입장
-        if (membershipRepository.existsByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
-                user.getId(), today, today)) {
-            attendanceRepository.save(Attendance.create(user, EntryType.MEMBERSHIP, null));
-            return new KioskCheckinResponse(maskedName, "MEMBERSHIP", null,
-                    now, true, "입장이 처리되었습니다.");
-        }
-
         // 4) 입장 불가
         if (nextEntryTime != null) {
             throw new BusinessException(ErrorCode.ENTRY_NOT_ALLOWED,
                     "PT 입장 가능 시각은 " + nextEntryTime.format(HHMM) + "입니다.");
         }
-        throw new BusinessException(ErrorCode.ENTRY_NOT_ALLOWED,
-                "입장 가능한 이용권이 없습니다. 데스크에 문의해 주세요.");
+        throw new BusinessException(ErrorCode.ENTRY_NOT_ALLOWED, NO_PASS_MESSAGE);
     }
 
     /** 내 출석 기록 (기간 생략 가능) */

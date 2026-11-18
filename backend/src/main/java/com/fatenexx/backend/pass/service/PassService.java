@@ -52,8 +52,9 @@ public class PassService {
     }
 
     private PtPassItemResponse toPtPassItem(PtPass p, LocalDate today) {
+        String status = ptPassStatus(p, today);
         long reserved = ptReservationRepository.countByPtPassIdAndStatusIn(p.getId(), HOLDING);
-        long available = Math.max(0, p.getRemainingCount() - reserved);
+        long available = availableCount(p, reserved, status);
         User trainer = p.getTrainer();
 
         return new PtPassItemResponse(
@@ -64,11 +65,17 @@ public class PassService {
                 trainer == null ? null : trainer.getName(),
                 p.getStartDate(),
                 p.getEndDate(),
-                p.getProduct().getTotalCount(),
+                p.getTotalCount(),          // 구매 당시 횟수 (상품 횟수가 바뀌어도 그대로)
                 p.getRemainingCount(),
                 reserved,
                 available,
-                ptPassStatus(p, today));
+                status);
+    }
+
+    // 새로 예약할 수 있는 횟수: 남은 횟수 - 확보된 횟수. 만료·소진된 이용권은 0 (처리 규칙 9번)
+    private long availableCount(PtPass p, long reserved, String status) {
+        if ("EXPIRED".equals(status) || "EXHAUSTED".equals(status)) return 0;
+        return Math.max(0, p.getRemainingCount() - reserved);
     }
 
     private String membershipStatus(Membership m, LocalDate today) {
@@ -97,14 +104,20 @@ public class PassService {
         List<ClientResponse> clients = byUser.values().stream().map(list -> {
             User u = list.get(0).getUser();
             List<ClientPassResponse> passes = list.stream()
-                    .map(p -> new ClientPassResponse(p.getId(), p.getProduct().getName(),
-                            p.getStartDate(), p.getEndDate(),
-                            p.getProduct().getTotalCount(), p.getRemainingCount()))
+                    .map(p -> {
+                        String status = ptPassStatus(p, today);
+                        long reserved = ptReservationRepository.countByPtPassIdAndStatusIn(p.getId(), HOLDING);
+                        return new ClientPassResponse(p.getId(), p.getProduct().getName(),
+                                p.getStartDate(), p.getEndDate(),
+                                p.getTotalCount(), p.getRemainingCount(),
+                                p.getTotalCount() - p.getRemainingCount(),
+                                reserved, availableCount(p, reserved, status), status);
+                    })
                     .toList();
             return new ClientResponse(u.getId(), u.getName(), u.getPhone(), u.getBirthDate(),
                     u.getGender() == null ? null : u.getGender().name(), passes);
         }).toList();
 
-        return new ClientListResponse(clients);
+        return new ClientListResponse(clients.size(), clients);
     }
 }

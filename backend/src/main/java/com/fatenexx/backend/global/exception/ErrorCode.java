@@ -24,6 +24,7 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 사용자를 찾을 수 없습니다."),
 
     SETTING_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "설정값을 찾을 수 없습니다."),
+    SETTING_CONFLICT(HttpStatus.CONFLICT, "설정값끼리 맞지 않습니다."),
 
     // Product
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 상품을 찾을 수 없습니다."),

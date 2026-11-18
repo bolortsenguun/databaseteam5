@@ -6,7 +6,10 @@ import com.fatenexx.backend.global.response.ApiResponse;
 import com.fatenexx.backend.payment.dto.*;
 import com.fatenexx.backend.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/v1/admin/payments")
@@ -18,8 +21,13 @@ public class AdminPaymentController {
 
     @GetMapping
     public ApiResponse<PaymentPageResponse<AdminPaymentItemResponse>> list(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String status,          // 성공 / 실패 (없으면 전체)
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(paymentService.getAllPayments(page, size), "조회되었습니다.");
+        return ApiResponse.ok(paymentService.getAllPayments(userId, status, startDate, endDate, page, size),
+                "조회되었습니다.");
     }
 }

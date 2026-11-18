@@ -31,7 +31,7 @@ export default function AdminPayments() {
       <Async state={list} isEmpty={d => d.payments.length === 0} empty="조건에 맞는 결제가 없어요.">
         {d => (
           <div className="card">
-            <span className="muted small">{d.totalCount}건{d.clientFiltered ? ' · 백엔드에 검색 조건이 아직 없어서 최근 100건 안에서만 걸러 보여요.' : ''}</span>
+            <span className="muted small">{d.totalCount}건</span>
             <div className="tblwrap">
               <table className="tbl">
                 <thead><tr><th>일시</th><th>회원</th><th>구분</th><th>상품</th><th>금액</th><th>결과</th></tr></thead>
