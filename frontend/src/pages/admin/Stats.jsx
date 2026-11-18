@@ -83,7 +83,7 @@ export default function AdminStats() {
                     </table>
                   </div>
                 )}
-                <span className="dim small">예정은 아직 출석·결석 처리 전(예약, 결과 대기)인 수업이에요.</span>
+                {d.trainerColumns.some(([k]) => k === 'upcomingCount') && <span className="dim small">예정은 아직 출석·결석 처리 전(예약, 결과 대기)인 수업이에요.</span>}
               </section>
               <section className="card">
                 <h3>시간대별 입장</h3>

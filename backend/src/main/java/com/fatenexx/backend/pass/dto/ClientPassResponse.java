@@ -12,6 +12,6 @@ public record ClientPassResponse(
         int usedCount,          // 차감된 횟수 = total - remaining
         long reservedCount,     // 예약 + 결과대기로 확보된 횟수
         long availableCount,    // 새로 예약할 수 있는 횟수 (만료·소진이면 0)
-        String status           // BEFORE_START / ACTIVE / EXHAUSTED / EXPIRED
+        String status           // 이용예정 / 이용중 / 소진 / 만료
 ) {
 }

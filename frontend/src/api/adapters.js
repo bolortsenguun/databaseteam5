@@ -43,7 +43,9 @@ export function normalizeClients(d) {
 }
 
 function paymentItem(x) {
-  const productType = x.productType ?? (x.purchaseType ? PURCHASE[x.purchaseType] || x.purchaseType : null)
+  const base = x.productType ?? (x.purchaseType ? PURCHASE[x.purchaseType] || x.purchaseType : null)
+  // PT는 개인/그룹까지 표시 (예: 개인 PT)
+  const productType = base === 'PT' && x.ptType ? `${ptType(x.ptType)} PT` : base
   return { ...x, status: payStatus(x.status), productType, productName: x.productName ?? null }
 }
 

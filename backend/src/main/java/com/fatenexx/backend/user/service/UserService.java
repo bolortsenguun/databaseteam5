@@ -58,15 +58,15 @@ public class UserService {
 
     // 관리자: 회원 목록 (이름·전화번호·아이디 검색)
     public MemberListResponse getMembers(String keyword, String membershipStatus, int page, int size) {
-        if (page < 0 || size < 1 || size > 100) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "page는 0 이상, size는 1~100이어야 합니다.");
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "page는 1 이상, size는 1~100이어야 합니다.");
         }
         String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
         Boolean active = parseMembershipStatus(membershipStatus);
         LocalDate today = LocalDate.now(KST);
 
         Page<User> result = userRepository.searchMembers(Role.MEMBER, kw, active, today,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")));
+                PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "id")));
 
         // 이번 페이지 회원들의 이용 상태를 쿼리 한 번으로 조회
         List<Long> ids = result.getContent().stream().map(User::getId).toList();
@@ -108,7 +108,7 @@ public class UserService {
         List<AttendanceItemResponse> recentAttendances = attendanceRepository
                 .findTop10ByUserIdOrderByCheckedInAtDesc(member.getId()).stream()
                 .map(a -> new AttendanceItemResponse(a.getId(), a.getCheckedInAt(),
-                        a.getEntryType().name(),
+                        a.getEntryType().getLabel(),
                         a.getReservation() == null ? null : a.getReservation().getId()))
                 .toList();
         return AdminMemberDetailResponse.of(member, passService.getMyPasses(member.getId()), recentAttendances);

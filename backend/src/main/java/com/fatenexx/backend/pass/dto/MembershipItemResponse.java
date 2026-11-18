@@ -7,6 +7,6 @@ public record MembershipItemResponse(
         String productName,
         LocalDate startDate,
         LocalDate endDate,
-        String status          // BEFORE_START / ACTIVE / EXPIRED
+        String status          // 이용예정 / 이용중 / 만료
 ) {
 }

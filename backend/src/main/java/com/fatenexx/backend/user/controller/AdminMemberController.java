@@ -23,7 +23,7 @@ public class AdminMemberController {
     public ApiResponse<MemberListResponse> getMembers(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String membershipStatus,   // 이용중 / 미이용 (없으면 전체)
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(userService.getMembers(keyword, membershipStatus, page, size),
                 "회원 목록을 조회했습니다.");

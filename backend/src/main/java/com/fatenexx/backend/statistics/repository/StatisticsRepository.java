@@ -1,8 +1,10 @@
 package com.fatenexx.backend.statistics.repository;
 
+import com.fatenexx.backend.global.auth.Role;
 import com.fatenexx.backend.group.entity.GroupClassStatus;
 import com.fatenexx.backend.payment.entity.PaymentStatus;
 import com.fatenexx.backend.reservation.entity.ReservationStatus;
+import com.fatenexx.backend.user.entity.ApprovalStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Repository;
@@ -31,6 +33,16 @@ public class StatisticsRepository {
     }
 
     /** 오늘 유효한 회원권을 가진 회원 수 */
+    /** 역할별 사용자 수 (approvalStatus가 null이면 승인 상태 무관) */
+    public long countUsers(Role role, ApprovalStatus approvalStatus) {
+        return em.createQuery(
+                        "select count(u) from User u where u.role = :role " +
+                                "and (:approval is null or u.approvalStatus = :approval)", Long.class)
+                .setParameter("role", role)
+                .setParameter("approval", approvalStatus)
+                .getSingleResult();
+    }
+
     public long countActiveMembers(LocalDate today) {
         return em.createQuery(
                         "select count(distinct m.user.id) from Membership m " +
@@ -97,13 +109,29 @@ public class StatisticsRepository {
                 .getResultList();
     }
 
-    /** 트레이너별 예약 상태 건수: [트레이너id, 이름, 상태, 건수] */
-    public List<Object[]> trainerReservationCounts(LocalDate from, LocalDate to) {
+    /**
+     * 트레이너별 예약 상태 건수: [트레이너id, 이름, 상태, 건수]
+     * group = false면 개인 PT만, true면 그룹 PT만 (그룹은 참여자 한 명당 1건)
+     */
+    public List<Object[]> trainerReservationCounts(LocalDate from, LocalDate to, boolean group) {
         return em.createQuery(
                         "select t.id, t.name, r.status, count(r) from PtReservation r join r.trainer t " +
                                 "where r.lessonDate >= :from and r.lessonDate <= :to " +
+                                "and r.groupClass is " + (group ? "not null " : "null ") +
                                 "group by t.id, t.name, r.status " +
                                 "order by t.id", Object[].class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+    }
+
+    /** 트레이너별 진행된(확정) 그룹 수업 수: [트레이너id, 건수] */
+    public List<Object[]> trainerGroupClassesHeld(LocalDate from, LocalDate to, GroupClassStatus status) {
+        return em.createQuery(
+                        "select g.trainer.id, count(g) from GroupClass g " +
+                                "where g.status = :status and g.classDate >= :from and g.classDate <= :to " +
+                                "group by g.trainer.id", Object[].class)
+                .setParameter("status", status)
                 .setParameter("from", from)
                 .setParameter("to", to)
                 .getResultList();

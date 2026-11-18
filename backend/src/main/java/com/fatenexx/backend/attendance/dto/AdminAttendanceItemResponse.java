@@ -1,5 +1,6 @@
 package com.fatenexx.backend.attendance.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 
 public record AdminAttendanceItemResponse(
@@ -7,7 +8,7 @@ public record AdminAttendanceItemResponse(
         Long userId,
         String userName,
         String phone,
-        LocalDateTime checkedInAt,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime checkedInAt,
         String entryType,
         Long reservationId
 ) {

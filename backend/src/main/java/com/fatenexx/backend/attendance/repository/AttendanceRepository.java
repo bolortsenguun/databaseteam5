@@ -1,6 +1,7 @@
 package com.fatenexx.backend.attendance.repository;
 
 import com.fatenexx.backend.attendance.entity.Attendance;
+import com.fatenexx.backend.attendance.entity.EntryType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,9 +24,20 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     // 관리자 회원 상세: 최근 입장 기록 10건
     List<Attendance> findTop10ByUserIdOrderByCheckedInAtDesc(Long userId);
 
-    // 관리자: 하루치 입장 기록 (회원 정보 포함)
-    @Query("select a from Attendance a join fetch a.user " +
-            "where a.checkedInAt >= :from and a.checkedInAt < :to " +
-            "order by a.checkedInAt desc")
-    List<Attendance> findByDay(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+    // 관리자 출석 검색: 조건이 null이면 무시. 기간은 from 이상 ~ to 미만, 최신순
+    @Query(value = "select a from Attendance a join fetch a.user u " +
+            "where (:userId is null or u.id = :userId) " +
+            "and (:entryType is null or a.entryType = :entryType) " +
+            "and (:from is null or a.checkedInAt >= :from) " +
+            "and (:to is null or a.checkedInAt < :to)",
+            countQuery = "select count(a) from Attendance a " +
+                    "where (:userId is null or a.user.id = :userId) " +
+                    "and (:entryType is null or a.entryType = :entryType) " +
+                    "and (:from is null or a.checkedInAt >= :from) " +
+                    "and (:to is null or a.checkedInAt < :to)")
+    Page<Attendance> searchForAdmin(@Param("userId") Long userId,
+                                    @Param("entryType") EntryType entryType,
+                                    @Param("from") LocalDateTime from,
+                                    @Param("to") LocalDateTime to,
+                                    Pageable pageable);
 }
