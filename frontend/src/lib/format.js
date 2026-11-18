@@ -98,7 +98,7 @@ export function hourStr(h) {
 const STATUS_TONE = {
   '예약': 'info', '결과대기': 'warn', '출석': 'ok', '결석': 'bad', '취소': '',
   '개설': 'info', '확정': 'ok', '폐강': 'bad',
-  '이용중': 'ok', '이용예정': 'info', '만료': '',
+  '이용중': 'ok', '이용예정': 'info', '만료': '', '소진': 'warn',
   '성공': 'ok', '실패': 'bad',
   '승인': 'ok', '승인대기': 'warn', 'APPROVED': 'ok', 'PENDING': 'warn',
   '판매 중': 'ok', '판매 중지': ''

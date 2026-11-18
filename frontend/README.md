@@ -19,22 +19,15 @@ npm run build      # dist/ 생성
 
 | 값 | 동작 |
 | --- | --- |
-| `missing` (기본, `.env`) | 백엔드에 아직 없는 API만 목업, 나머지는 실제 백엔드 |
-| `all` (`.env.mock`) | 모든 API를 브라우저 안의 가짜 백엔드로 처리 |
-| `off` | 목업 없이 전부 실제 백엔드 |
+| `off` (기본, `.env`) | 전부 실제 백엔드 |
+| `all` (`.env.mock`, `npm run dev:mock`) | 모든 API를 브라우저 안의 가짜 백엔드로 처리 |
+| `missing` | `src/api/mock.js`의 `MISSING` 목록에 있는 API만 목업 (지금은 비어 있음) |
 
-`missing`에서 목업으로 처리하는 API는 `src/api/mock.js`의 `MISSING` 목록이다.
+목업은 main(`9b88482`) 백엔드 코드와 같은 응답 모양으로 만들어 뒀다. 목업 계정은 member1, member2, trainer1, trainer2(승인 대기), admin이고 비밀번호는 모두 `test1234`다. 데이터는 탭을 닫을 때까지 유지되고, 로그인 화면의 '목업 데이터 초기화'로 처음 상태로 되돌린다.
 
-- `/payments/*`, `/admin/payments`
-- `/passes/me`, `/trainers/me/clients`
-- `/kiosk/checkins`, `/attendances/me`, `/admin/attendances`
-- `/admin/dashboard`, `/admin/statistics`, `/admin/settings`
+## 백엔드 응답 형식
 
-B 파트 API가 완성되면 해당 줄을 지우고, 전부 끝나면 `.env`를 `VITE_MOCK=off`로 바꾼다.
-
-`missing` 모드의 목업 데이터는 `db/test-data.sql`과 같은 ID(member1=1, trainer1=2, admin=3)를 쓴다. 다만 목업 결제로 산 이용권은 실제 백엔드의 예약 API에는 보이지 않는다.
-
-목업 계정(`all` 모드)은 member1, member2, trainer1, trainer2(승인 대기), admin이고 비밀번호는 모두 `test1234`다. 데이터는 탭을 닫을 때까지 유지되고, 로그인 화면의 '목업 데이터 초기화'로 처음 상태로 되돌린다.
+노션 명세와 실제 코드의 응답 모양이 다른 곳이 많아서 `src/api/adapters.js`에서 두 형식을 모두 받아 화면용으로 바꾼다. 백엔드가 어느 쪽으로 맞춰도 화면 코드는 그대로 둔다.
 
 ## 구조
 

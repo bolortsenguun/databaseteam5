@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { members } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
-import { Async, PageTitle, Pager } from '../../components/ui'
+import { Async, Badge, PageTitle, Pager } from '../../components/ui'
 import { fmtDate, fmtPhone, genderLabel } from '../../lib/format'
 
 export default function AdminMembers() {
@@ -19,12 +19,14 @@ export default function AdminMembers() {
         {q.keyword && <button type="button" className="btn" onClick={() => { setKw(''); setQ({ keyword: '', page: 0 }) }}>초기화</button>}
       </form>
       <Async state={list} isEmpty={d => d.members.length === 0} empty={q.keyword ? '검색 결과가 없어요.' : '가입한 회원이 없어요.'}>
-        {d => (
+        {d => {
+          const hasStatus = d.members.some(m => m.membershipStatus !== undefined)
+          return (
           <div className="card">
-            <span className="muted small">전체 {d.totalElements}명</span>
+            <span className="muted small">전체 {d.totalElements ?? d.totalCount}명</span>
             <div className="tblwrap">
               <table className="tbl">
-                <thead><tr><th>이름</th><th>아이디</th><th>전화번호</th><th>성별</th><th>가입일</th></tr></thead>
+                <thead><tr><th>이름</th><th>아이디</th><th>전화번호</th><th>성별</th>{hasStatus && <th>이용 상태</th>}<th>가입일</th></tr></thead>
                 <tbody>
                   {d.members.map(m => (
                     <tr key={m.userId} className="click" onClick={() => nav(`/admin/members/${m.userId}`)}>
@@ -32,6 +34,7 @@ export default function AdminMembers() {
                       <td>{m.loginId}</td>
                       <td>{fmtPhone(m.phone)}</td>
                       <td>{genderLabel(m.gender)}</td>
+                      {hasStatus && <td><Badge s={m.membershipStatus} tone={m.membershipStatus === '이용중' ? 'ok' : ''}>{m.membershipStatus === '이용중' ? '회원권 이용 중' : m.membershipStatus === '미이용' ? '이용권 없음' : m.membershipStatus}</Badge></td>}
                       <td>{fmtDate(m.createdAt)}</td>
                     </tr>
                   ))}
@@ -40,7 +43,8 @@ export default function AdminMembers() {
             </div>
             <Pager page={d.page} totalPages={d.totalPages} base={0} onChange={p => setQ({ ...q, page: p })} />
           </div>
-        )}
+          )
+        }}
       </Async>
     </main>
   )

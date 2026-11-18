@@ -23,8 +23,7 @@ export default function Kiosk() {
     }
     setBusy(true)
     try {
-      const r = await attendance.kiosk('010' + digits)
-      const d = r.data
+      const d = await attendance.kiosk('010' + digits)
       setResult({ ok: true, dup: d.duplicate, msg: d.duplicate ? `${d.name} 님, 이미 체크인됐어요.` : `${d.name} 님, 체크인됐어요!`, sub: `${d.entryType === 'PT' ? 'PT 예약' : '회원권'}으로 입장 · ${fmtTime(d.checkedInAt)}` })
       setDigits('')
     } catch (e) {

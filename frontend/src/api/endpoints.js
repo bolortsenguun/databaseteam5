@@ -1,4 +1,5 @@
 import { get, post, patch, del, requestRaw } from './client'
+import { normalizeAttendancePage, normalizeClients, normalizeDashboard, normalizeKiosk, normalizePasses, normalizePaymentPage, normalizePaymentResult, normalizeSettings, normalizeStatistics } from './adapters'
 
 export const auth = {
   me: () => get('/auth/me'),
@@ -24,31 +25,87 @@ export const products = {
   updatePt: (id, body) => patch(`/admin/pt-products/${id}`, body)
 }
 
+const zeroBased = q => ({ ...q, page: Math.max(0, Number(q?.page ?? 1) - 1) })
+
 export const payments = {
-  simulate: body => requestRaw('POST', '/payments/simulate', { body }),
-  mine: query => get('/payments/me', query),
-  adminList: query => get('/admin/payments', query)
+  simulate: async ({ kind, productId, trainerId, startDate, success }) => {
+    const body = { purchaseType: kind === 'membership' ? 'MEMBERSHIP' : 'PT', productId, startDate, simulateFail: !success }
+    if (kind === 'personal') body.trainerId = trainerId
+    const r = await requestRaw('POST', '/payments/simulate', { body })
+    return normalizePaymentResult(r.data)
+  },
+  mine: async query => normalizePaymentPage(await get('/payments/me', zeroBased(query))),
+  adminList: async query => {
+    const { status, userId, startDate, endDate, ...rest } = query || {}
+    const filtered = (status && status !== '전체') || userId || startDate || endDate
+    if (!filtered) return normalizePaymentPage(await get('/admin/payments', zeroBased(rest)))
+    const all = normalizePaymentPage(await get('/admin/payments', { page: 0, size: 100 }))
+    const list = all.payments.filter(x =>
+      (!status || status === '전체' || x.status === status) &&
+      (!userId || x.userId === Number(userId)) &&
+      (!startDate || x.paidAt.slice(0, 10) >= startDate) &&
+      (!endDate || x.paidAt.slice(0, 10) <= endDate))
+    const size = Number(rest.size || 20)
+    const page = Number(rest.page || 1)
+    return { payments: list.slice((page - 1) * size, page * size), page, size, totalCount: list.length, totalPages: Math.max(1, Math.ceil(list.length / size)), clientFiltered: true }
+  }
 }
 
 export const passes = {
-  mine: () => get('/passes/me'),
-  clients: () => get('/trainers/me/clients')
+  mine: async () => normalizePasses(await get('/passes/me')),
+  clients: async () => normalizeClients(await get('/trainers/me/clients'))
 }
 
 export const attendance = {
-  kiosk: phone => requestRaw('POST', '/kiosk/checkins', { body: { phone } }),
-  mine: query => get('/attendances/me', query),
-  adminList: query => get('/admin/attendances', query)
+  kiosk: async phone => {
+    const r = await requestRaw('POST', '/kiosk/checkins', { body: { phone } })
+    return normalizeKiosk(r.data)
+  },
+  mine: async query => {
+    const { startDate, endDate, page, size } = query || {}
+    const d = await get('/attendances/me', { from: startDate, to: endDate, startDate, endDate, page: Math.max(0, Number(page ?? 1) - 1), size })
+    return normalizeAttendancePage(d)
+  },
+  adminList: async query => {
+    const { date, startDate, endDate, entryType, userId, page = 1, size = 20 } = query || {}
+    const day = date || (startDate && startDate === endDate ? startDate : startDate || endDate)
+    const d = normalizeAttendancePage(await get('/admin/attendances', { date: day, startDate, endDate, entryType, userId, page, size }), true)
+    if (d.totalPages > 1 || (d.size && d.size < d.totalCount)) return d
+    const list = d.attendances.filter(a => (!entryType || entryType === '전체' || a.entryType === entryType) && (!userId || a.userId === Number(userId)))
+    const s = Number(size)
+    const p = Number(page)
+    return { attendances: list.slice((p - 1) * s, p * s), page: p, size: s, totalCount: list.length, totalPages: Math.max(1, Math.ceil(list.length / s)), singleDay: true }
+  }
 }
 
+const safe = p => p.catch(() => null)
+
 export const stats = {
-  dashboard: () => get('/admin/dashboard'),
-  statistics: query => get('/admin/statistics', query)
+  dashboard: async () => {
+    const d = await get('/admin/dashboard')
+    if (d.totalMembers !== undefined && d.monthlyRevenue !== undefined) return normalizeDashboard(d)
+    const [pending, approved, mem, st] = await Promise.all([
+      safe(get('/admin/trainers', { approvalStatus: '승인대기', page: 1, size: 1 })),
+      safe(get('/admin/trainers', { approvalStatus: '승인', page: 1, size: 1 })),
+      safe(get('/admin/members', { page: 0, size: 1 })),
+      safe(get('/admin/statistics'))
+    ])
+    return normalizeDashboard(d, {
+      pendingTrainers: pending?.totalCount ?? pending?.totalElements,
+      approvedTrainers: approved?.totalCount ?? approved?.totalElements,
+      totalMembers: mem?.totalElements ?? mem?.totalCount,
+      monthlyRevenue: st ? normalizeStatistics(st).totalRevenue : null
+    })
+  },
+  statistics: async query => {
+    const { startDate, endDate, ...rest } = query || {}
+    return normalizeStatistics(await get('/admin/statistics', { from: startDate, to: endDate, startDate, endDate, ...rest }))
+  }
 }
 
 export const settings = {
-  get: () => get('/admin/settings'),
-  save: list => patch('/admin/settings', { settings: list })
+  get: async () => normalizeSettings(await get('/admin/settings')),
+  save: list => patch('/admin/settings', { settings: list.map(s => ({ key: s.settingKey, value: s.settingValue, settingKey: s.settingKey, settingValue: s.settingValue })) })
 }
 
 export const trainers = {

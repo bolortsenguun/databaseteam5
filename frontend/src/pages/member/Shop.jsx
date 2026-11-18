@@ -129,16 +129,14 @@ function BuyFlow({ buy, base, initialTrainer, onClose, onPaid }) {
     setStep('pay')
   }
 
-  const pay = async simulationResult => {
+  const pay = async success => {
     setBusy(true)
     setErr('')
     try {
-      const body = { productType: kind === 'membership' ? '회원권' : 'PT', productId: product.productId, startDate, simulationResult }
-      if (kind === 'personal') body.trainerId = trainerId
-      const r = await payments.simulate(body)
-      setResult(r.data)
+      const r = await payments.simulate({ kind, productId: product.productId, trainerId, startDate, success })
+      setResult(r)
       setStep('done')
-      if (r.data.status === '성공') onPaid()
+      if (r.status === '성공') onPaid()
     } catch (e) {
       setErr(e.message)
       setStep('form')
@@ -152,7 +150,7 @@ function BuyFlow({ buy, base, initialTrainer, onClose, onPaid }) {
     return (
       <Modal title={okPay ? '결제가 완료됐어요' : '결제에 실패했어요'} onClose={onClose}>
         <div className={`alert ${okPay ? 'info' : 'bad'}`}>
-          {okPay ? `${product.name}을(를) 샀어요. ${fmtDate(result.pass.startDate)}부터 ${fmtDate(result.pass.endDate)}까지 쓸 수 있어요.` : '모의 결제가 실패로 끝나서 이용권이 만들어지지 않았어요. 결제 기록은 이용 내역에 남아요.'}
+          {okPay ? `${product.name}을(를) 샀어요. ${fmtDate(result.startDate)}부터 ${fmtDate(result.endDate)}까지 쓸 수 있어요.` : '모의 결제가 실패로 끝나서 이용권이 만들어지지 않았어요. 결제 기록은 이용 내역에 남아요.'}
         </div>
         <dl className="kv">
           <dt>상품</dt><dd>{product.name}</dd>
@@ -180,8 +178,8 @@ function BuyFlow({ buy, base, initialTrainer, onClose, onPaid }) {
         {err && <div className="alert bad">{err}</div>}
         <div className="row end">
           <button className="btn" onClick={() => setStep('form')} disabled={busy}>이전</button>
-          <button className="btn danger" onClick={() => pay('실패')} disabled={busy}>결제 실패</button>
-          <button className="btn primary" onClick={() => pay('성공')} disabled={busy}>{busy ? '결제 중…' : '결제 성공'}</button>
+          <button className="btn danger" onClick={() => pay(false)} disabled={busy}>결제 실패</button>
+          <button className="btn primary" onClick={() => pay(true)} disabled={busy}>{busy ? '결제 중…' : '결제 성공'}</button>
         </div>
       </Modal>
     )

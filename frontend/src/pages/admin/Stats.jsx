@@ -40,7 +40,7 @@ export default function AdminStats() {
 
   return (
     <main className="page">
-      <PageTitle title="통계" sub="성공한 결제만 매출로 계산해요. 개인 PT와 그룹 PT는 따로 집계해요." />
+      <PageTitle title="통계" sub="성공한 결제만 매출로 계산해요. 트레이너 실적은 수업일 기준이에요." />
       <div className="card">
         <div className="row" style={{ alignItems: 'flex-end' }}>
           <Field label="시작일"><input className="input" type="date" value={range.startDate} onChange={e => setRange({ ...range, startDate: e.target.value })} /></Field>
@@ -54,7 +54,7 @@ export default function AdminStats() {
       </div>
       <Async state={s}>
         {d => {
-          const total = d.monthlyRevenue.reduce((a, m) => a + m.amount, 0)
+          const total = d.totalRevenue
           return (
             <>
               <section className="card">
@@ -71,24 +71,19 @@ export default function AdminStats() {
                 {d.trainerPerformance.length === 0 ? <Empty>실적이 없어요.</Empty> : (
                   <div className="tblwrap">
                     <table className="tbl">
-                      <thead><tr><th>트레이너</th><th>개인 출석</th><th>개인 결석</th><th>그룹 수업</th><th>그룹 출석</th><th>그룹 결석</th><th>합계</th></tr></thead>
+                      <thead><tr><th>트레이너</th>{d.trainerColumns.map(([k, l]) => <th key={k}>{l}</th>)}</tr></thead>
                       <tbody>
                         {d.trainerPerformance.map(t => (
                           <tr key={t.trainerId}>
                             <td><b>{t.trainerName}</b></td>
-                            <td className="num">{t.individualAttendanceCount}</td>
-                            <td className="num">{t.individualAbsenceCount}</td>
-                            <td className="num">{t.groupClassesHeld}</td>
-                            <td className="num">{t.groupAttendanceCount}</td>
-                            <td className="num">{t.groupAbsenceCount}</td>
-                            <td className="num"><b>{t.totalProcessedCount}</b></td>
+                            {d.trainerColumns.map(([k]) => <td key={k} className="num">{t[k] ?? 0}</td>)}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
-                <span className="dim small">회원이 차감 취소한 수업은 실적에 들어가지 않아요.</span>
+                <span className="dim small">예정은 아직 출석·결석 처리 전(예약, 결과 대기)인 수업이에요.</span>
               </section>
               <section className="card">
                 <h3>시간대별 입장</h3>
