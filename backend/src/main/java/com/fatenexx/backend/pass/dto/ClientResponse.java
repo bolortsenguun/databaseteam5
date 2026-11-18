@@ -9,6 +9,6 @@ public record ClientResponse(
         String phone,
         LocalDate birthDate,
         String gender,
-        List<ClientPassResponse> passes
+        List<ClientPassResponse> ptPasses
 ) {
 }

@@ -35,20 +35,8 @@ export const payments = {
     return normalizePaymentResult(r.data)
   },
   mine: async query => normalizePaymentPage(await get('/payments/me', zeroBased(query))),
-  adminList: async query => {
-    const { status, userId, startDate, endDate, ...rest } = query || {}
-    const filtered = (status && status !== '전체') || userId || startDate || endDate
-    if (!filtered) return normalizePaymentPage(await get('/admin/payments', zeroBased(rest)))
-    const all = normalizePaymentPage(await get('/admin/payments', { page: 0, size: 100 }))
-    const list = all.payments.filter(x =>
-      (!status || status === '전체' || x.status === status) &&
-      (!userId || x.userId === Number(userId)) &&
-      (!startDate || x.paidAt.slice(0, 10) >= startDate) &&
-      (!endDate || x.paidAt.slice(0, 10) <= endDate))
-    const size = Number(rest.size || 20)
-    const page = Number(rest.page || 1)
-    return { payments: list.slice((page - 1) * size, page * size), page, size, totalCount: list.length, totalPages: Math.max(1, Math.ceil(list.length / size)), clientFiltered: true }
-  }
+  // 회원·결과·기간 조건을 서버에서 검색 (page는 화면 1부터 → 서버 0부터)
+  adminList: async query => normalizePaymentPage(await get('/admin/payments', zeroBased(query)))
 }
 
 export const passes = {

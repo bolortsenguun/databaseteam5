@@ -148,11 +148,21 @@ public class PaymentService {
         return new PaymentPageResponse<>(items, page, size, result.getTotalElements(), result.getTotalPages());
     }
 
-    /** 관리자: 전체 결제 목록 */
+    /** 관리자: 결제 목록 (회원·결과·기간 검색, 조건이 없으면 전체) */
     @Transactional(readOnly = true)
-    public PaymentPageResponse<AdminPaymentItemResponse> getAllPayments(int page, int size) {
+    public PaymentPageResponse<AdminPaymentItemResponse> getAllPayments(Long userId, String status,
+                                                                        LocalDate startDate, LocalDate endDate,
+                                                                        int page, int size) {
         Pageable pageable = toPageable(page, size);
-        Page<Payment> result = paymentRepository.findAllWithUser(pageable);
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "시작일은 종료일보다 늦을 수 없습니다.");
+        }
+        Page<Payment> result = paymentRepository.searchForAdmin(
+                userId,
+                parseStatus(status),
+                startDate == null ? null : startDate.atStartOfDay(),
+                endDate == null ? null : endDate.plusDays(1).atStartOfDay(),   // 종료일 하루 전체 포함
+                pageable);
         Map<Long, PassInfo> info = loadPassInfo(result.getContent());
 
         List<AdminPaymentItemResponse> items = result.getContent().stream().map(p -> {
@@ -164,6 +174,15 @@ public class PaymentService {
         }).toList();
 
         return new PaymentPageResponse<>(items, page, size, result.getTotalElements(), result.getTotalPages());
+    }
+
+    // 성공/실패 또는 SUCCESS/FAIL. 없거나 전체면 null(조건 없음)
+    private PaymentStatus parseStatus(String status) {
+        if (status == null || status.isBlank() || status.equals("전체")) return null;
+        for (PaymentStatus s : PaymentStatus.values()) {
+            if (s.name().equals(status) || s.getLabel().equals(status)) return s;
+        }
+        throw new BusinessException(ErrorCode.INVALID_INPUT, "status는 성공 또는 실패여야 합니다.");
     }
 
     private Pageable toPageable(int page, int size) {
