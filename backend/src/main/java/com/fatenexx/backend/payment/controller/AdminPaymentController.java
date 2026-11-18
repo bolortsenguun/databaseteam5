@@ -25,7 +25,7 @@ public class AdminPaymentController {
             @RequestParam(required = false) String status,          // 성공 / 실패 (없으면 전체)
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(paymentService.getAllPayments(userId, status, startDate, endDate, page, size),
                 "조회되었습니다.");

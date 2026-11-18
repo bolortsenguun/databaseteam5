@@ -6,7 +6,7 @@ public record PaymentPageResponse<T>(
         List<T> payments,
         int page,
         int size,
-        long totalElements,
+        long totalCount,
         int totalPages
 ) {
 }

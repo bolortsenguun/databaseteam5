@@ -17,7 +17,7 @@ public record PaymentResultResponse(
 ) {
     public static PaymentResultResponse of(Payment p, PurchaseType type, String productName,
                                            LocalDate startDate, LocalDate endDate) {
-        return new PaymentResultResponse(p.getId(), p.getStatus().name(), p.getAmount(),
+        return new PaymentResultResponse(p.getId(), p.getStatus().getLabel(), p.getAmount(),
                 p.getPaidAt(), type, productName, startDate, endDate);
     }
 }

@@ -68,7 +68,7 @@ public class AttendanceService {
         Optional<Attendance> last = attendanceRepository.findFirstByUserIdOrderByCheckedInAtDesc(user.getId());
         if (last.isPresent() && last.get().getCheckedInAt().isAfter(now.minusMinutes(recheckMinutes))) {
             Attendance a = last.get();
-            return new KioskCheckinResponse(maskedName, a.getEntryType().name(),
+            return new KioskCheckinResponse(maskedName, a.getEntryType().getLabel(),
                     a.getReservation() == null ? null : a.getReservation().getId(),
                     a.getCheckedInAt(), false, "이미 입장 처리되었습니다.");
         }
@@ -77,7 +77,7 @@ public class AttendanceService {
         if (membershipRepository.existsByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                 user.getId(), today, today)) {
             attendanceRepository.save(Attendance.create(user, EntryType.MEMBERSHIP, null));
-            return new KioskCheckinResponse(maskedName, "MEMBERSHIP", null,
+            return new KioskCheckinResponse(maskedName, EntryType.MEMBERSHIP.getLabel(), null,
                     now, true, "입장이 처리되었습니다.");
         }
 
@@ -107,7 +107,7 @@ public class AttendanceService {
 
         if (matched != null) {
             Attendance saved = attendanceRepository.save(Attendance.create(user, EntryType.PT, matched));
-            return new KioskCheckinResponse(maskedName, "PT", matched.getId(),
+            return new KioskCheckinResponse(maskedName, EntryType.PT.getLabel(), matched.getId(),
                     now, true, "PT 수업 입장이 처리되었습니다.");
         }
 
@@ -122,8 +122,8 @@ public class AttendanceService {
     /** 내 출석 기록 (기간 생략 가능) */
     @Transactional(readOnly = true)
     public AttendancePageResponse getMyAttendances(Long userId, LocalDate from, LocalDate to, int page, int size) {
-        if (page < 0 || size < 1 || size > 100) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "page는 0 이상, size는 1~100 이어야 합니다.");
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "page는 1 이상, size는 1~100 이어야 합니다.");
         }
         LocalDate f = (from == null) ? LocalDate.of(2000, 1, 1) : from;
         LocalDate t = (to == null) ? LocalDate.of(2100, 1, 1) : to;
@@ -131,14 +131,14 @@ public class AttendanceService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "시작일이 종료일보다 늦을 수 없습니다.");
         }
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "checkedInAt"));
+        Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "checkedInAt"));
         Page<Attendance> result = attendanceRepository
                 .findByUserIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThan(
                         userId, f.atStartOfDay(), t.plusDays(1).atStartOfDay(), pageable);
 
         List<AttendanceItemResponse> items = result.getContent().stream()
                 .map(a -> new AttendanceItemResponse(a.getId(), a.getCheckedInAt(),
-                        a.getEntryType().name(),
+                        a.getEntryType().getLabel(),
                         a.getReservation() == null ? null : a.getReservation().getId()))
                 .toList();
 
@@ -153,7 +153,7 @@ public class AttendanceService {
                 .findByDay(d.atStartOfDay(), d.plusDays(1).atStartOfDay()).stream()
                 .map(a -> new AdminAttendanceItemResponse(a.getId(), a.getUser().getId(),
                         a.getUser().getName(), a.getUser().getPhone(), a.getCheckedInAt(),
-                        a.getEntryType().name(),
+                        a.getEntryType().getLabel(),
                         a.getReservation() == null ? null : a.getReservation().getId()))
                 .toList();
         return new AdminAttendanceListResponse(d, items.size(), items);

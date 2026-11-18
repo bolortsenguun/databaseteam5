@@ -6,7 +6,7 @@ public record AttendancePageResponse(
         List<AttendanceItemResponse> attendances,
         int page,
         int size,
-        long totalElements,
+        long totalCount,
         int totalPages
 ) {
 }

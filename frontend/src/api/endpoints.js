@@ -25,7 +25,6 @@ export const products = {
   updatePt: (id, body) => patch(`/admin/pt-products/${id}`, body)
 }
 
-const zeroBased = q => ({ ...q, page: Math.max(0, Number(q?.page ?? 1) - 1) })
 
 export const payments = {
   simulate: async ({ kind, productId, trainerId, startDate, success }) => {
@@ -34,9 +33,9 @@ export const payments = {
     const r = await requestRaw('POST', '/payments/simulate', { body })
     return normalizePaymentResult(r.data)
   },
-  mine: async query => normalizePaymentPage(await get('/payments/me', zeroBased(query))),
-  // 회원·결과·기간 조건을 서버에서 검색 (page는 화면 1부터 → 서버 0부터)
-  adminList: async query => normalizePaymentPage(await get('/admin/payments', zeroBased(query)))
+  mine: async query => normalizePaymentPage(await get('/payments/me', query), true),
+  // 회원·결과·기간 조건을 서버에서 검색 (page는 1부터)
+  adminList: async query => normalizePaymentPage(await get('/admin/payments', query), true)
 }
 
 export const passes = {
@@ -51,8 +50,8 @@ export const attendance = {
   },
   mine: async query => {
     const { startDate, endDate, page, size } = query || {}
-    const d = await get('/attendances/me', { from: startDate, to: endDate, startDate, endDate, page: Math.max(0, Number(page ?? 1) - 1), size })
-    return normalizeAttendancePage(d)
+    const d = await get('/attendances/me', { from: startDate, to: endDate, startDate, endDate, page: page ?? 1, size })
+    return normalizeAttendancePage(d, true)
   },
   adminList: async query => {
     const { date, startDate, endDate, entryType, userId, page = 1, size = 20 } = query || {}
@@ -75,7 +74,7 @@ export const stats = {
     const [pending, approved, mem, st] = await Promise.all([
       safe(get('/admin/trainers', { approvalStatus: '승인대기', page: 1, size: 1 })),
       safe(get('/admin/trainers', { approvalStatus: '승인', page: 1, size: 1 })),
-      safe(get('/admin/members', { page: 0, size: 1 })),
+      safe(get('/admin/members', { page: 1, size: 1 })),
       safe(get('/admin/statistics'))
     ])
     return normalizeDashboard(d, {
