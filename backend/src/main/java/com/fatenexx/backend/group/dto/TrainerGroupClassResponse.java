@@ -11,6 +11,8 @@ public record TrainerGroupClassResponse(
         Long classId,
         String name,
         String description,
+        String workout,
+        String imageUrl,
         LocalDate classDate,
         @JsonFormat(pattern = "HH:mm") LocalTime startTime,
         @JsonFormat(pattern = "HH:mm") LocalTime endTime,
@@ -20,7 +22,9 @@ public record TrainerGroupClassResponse(
         List<ParticipantResponse> participants
 ) {
     public static TrainerGroupClassResponse of(GroupClass g, List<ParticipantResponse> participants) {
-        return new TrainerGroupClassResponse(g.getId(), g.getName(), g.getDescription(), g.getClassDate(),
+        return new TrainerGroupClassResponse(g.getId(), g.getName(), g.getDescription(),
+                g.getWorkout(), g.getImageUrl(),                                  // [추가]
+                g.getClassDate(),
                 g.getStartTime(), g.getEndTime(), g.getCapacity(), participants.size(),
                 g.getStatus().getLabel(), participants);
     }

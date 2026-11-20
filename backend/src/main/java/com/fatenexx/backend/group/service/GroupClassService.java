@@ -52,6 +52,12 @@ public class GroupClassService {
 
     private static final List<GroupClassStatus> ACTIVE = List.of(GroupClassStatus.OPEN, GroupClassStatus.CONFIRMED);
 
+    // [추가] 운동 종류 (그룹 수업 개설·수정 시 선택)
+    private static final List<String> WORKOUTS = List.of("서킷", "하체", "상체", "코어", "전신",
+            "스트레칭", "러닝", "케틀벨", "데드리프트", "힙·브릿지");
+    // [추가] 수업 사진 data URL 최대 길이(글자 수). 프론트가 720px JPEG로 줄여 보내므로 넉넉한 안전 상한
+    private static final int MAX_IMAGE_LENGTH = 1_500_000;
+
     private final GroupClassRepository groupClassRepository;
     private final PtReservationRepository reservationRepository;
     private final TrainerScheduleRepository scheduleRepository;
@@ -274,12 +280,15 @@ public class GroupClassService {
     public GroupClassResponse create(Long trainerId, GroupClassCreateRequest req) {
         validateCapacity(req.capacity());
         validateStartTime(req.startTime());
+        String workout = normalizeWorkout(req.workout());          // [추가]
+        String imageUrl = normalizeImageUrl(req.imageUrl());        // [추가]
         checkAvailable(trainerId, req.classDate(), req.startTime(), null);
 
         User trainer = userRepository.findByIdAndRole(trainerId, Role.TRAINER)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAINER_NOT_FOUND));
         GroupClass g = GroupClass.create(trainer, req.name(), blankToNull(req.description()),
                 req.classDate(), req.startTime(), req.capacity());
+        g.changeVisual(workout, imageUrl);                          // [추가]
         try {
             groupClassRepository.saveAndFlush(g);
         } catch (DataIntegrityViolationException e) {
@@ -308,6 +317,9 @@ public class GroupClassService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "수업명을 입력해 주세요.");
         }
         String description = req.description() != null ? blankToNull(req.description()) : g.getDescription();
+        // [추가] 운동 종류·사진: null = 그대로, "" = 삭제
+        String workout = req.workout() != null ? normalizeWorkout(req.workout()) : g.getWorkout();
+        String imageUrl = req.imageUrl() != null ? normalizeImageUrl(req.imageUrl()) : g.getImageUrl();
         LocalDate date = req.classDate() != null ? req.classDate() : g.getClassDate();
         LocalTime start = req.startTime() != null ? req.startTime() : g.getStartTime();
         int capacity = req.capacity() != null ? req.capacity() : g.getCapacity();
@@ -319,6 +331,7 @@ public class GroupClassService {
         }
 
         g.update(name, description, date, start, capacity);
+        g.changeVisual(workout, imageUrl);                          // [추가]
         try {
             groupClassRepository.flush();
         } catch (DataIntegrityViolationException e) {
@@ -455,5 +468,31 @@ public class GroupClassService {
 
     private String blankToNull(String s) {
         return (s == null || s.isBlank()) ? null : s;
+    }
+
+    // [추가] 운동 종류: 비어 있으면 null(없음), 목록에 없는 값이면 400
+    private String normalizeWorkout(String workout) {
+        if (workout == null || workout.isBlank()) {
+            return null;
+        }
+        if (!WORKOUTS.contains(workout)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "운동 종류는 " + String.join(", ", WORKOUTS) + " 중에서 선택해 주세요.");
+        }
+        return workout;
+    }
+
+    // [추가] 수업 사진: 비어 있으면 null(없음), 이미지 data URL이 아니거나 너무 크면 400
+    private String normalizeImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return null;
+        }
+        if (!imageUrl.startsWith("data:image/")) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "사진은 이미지 data URL 형식이어야 합니다.");
+        }
+        if (imageUrl.length() > MAX_IMAGE_LENGTH) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "사진 용량이 너무 큽니다. 더 작게 줄여서 올려 주세요.");
+        }
+        return imageUrl;
     }
 }
