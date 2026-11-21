@@ -62,7 +62,9 @@ function Membership({ p, att }) {
 }
 
 function PtCard({ p }) {
+  const order = { '이용중': 0, '이용예정': 1, '소진': 2 }
   const pts = (p.data?.ptPasses || []).filter(x => x.status !== '만료')
+    .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.endDate.localeCompare(b.endDate))   // 먼저 쓰게 될 이용권부터
   return (
     <div className="home-glass">
       <div className="row between">

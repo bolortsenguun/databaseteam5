@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { reservations } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
 import { Async, Badge, Field, PageTitle, Pager, useToast } from '../../components/ui'
-import { fmtMD, nowLocalISO } from '../../lib/format'
+import { fmtMD, fmtPhone, nowLocalISO } from '../../lib/format'
 import { ReasonCancel } from '../trainer/Lessons'
 
 const STATUSES = ['전체', '예약', '결과대기', '출석', '결석', '취소']
@@ -65,7 +65,7 @@ export default function AdminReservations() {
                       <tr key={r.reservationId}>
                         <td>{fmtMD(r.lessonDate)} <span className="num">{r.startTime}</span></td>
                         <td>{r.ptType === '그룹' ? `그룹 · ${r.className}` : '개인 PT'}</td>
-                        <td>{r.userName}</td>
+                        <td>{r.userName}{r.userPhone && <div className="dim small">{fmtPhone(r.userPhone)}</div>}</td>
                         <td>{r.trainerName}</td>
                         <td>
                           <Badge s={r.status} />

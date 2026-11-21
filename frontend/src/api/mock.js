@@ -374,9 +374,12 @@ const routes = [
   ['PATCH', /^\/users\/me$/, null, (p, q, b, ctx) => ok(userResponse(updateProfile(ctx.user, b)), '내 정보가 수정되었습니다.')],
   ['GET', /^\/admin\/members$/, ['ADMIN'], (p, q) => {
     const kw = (q.keyword || '').trim()
-    const list = db.users.filter(u => u.role === 'MEMBER' && (!kw || u.name.includes(kw) || u.loginId.includes(kw) || u.phone.includes(kw.replace(/\D/g, '') || '@@'))).sort((a, b) => b.id - a.id)
-    const pg = page(list, q.page ?? 0, q.size, 0)
-    return ok({ members: pg.items.map(u => ({ userId: u.id, loginId: u.loginId, name: u.name, phone: u.phone, gender: u.gender, createdAt: u.createdAt })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '회원 목록을 조회했습니다.')
+    if (q.membershipStatus && !['이용중', '미이용'].includes(q.membershipStatus)) fail(400, 'INVALID_INPUT', 'membershipStatus는 이용중 또는 미이용이어야 합니다.')
+    const active = u => db.memberships.some(m => m.userId === u.id && membershipStatus(m) === '이용중')
+    const list = db.users.filter(u => u.role === 'MEMBER' && (!kw || u.name.includes(kw) || u.loginId.includes(kw) || u.phone.includes(kw.replace(/\D/g, '') || '@@'))
+      && (!q.membershipStatus || (q.membershipStatus === '이용중') === active(u))).sort((a, b) => b.id - a.id)
+    const pg = page(list, q.page, q.size)
+    return ok({ members: pg.items.map(u => ({ userId: u.id, loginId: u.loginId, name: u.name, phone: u.phone, gender: u.gender, createdAt: u.createdAt, membershipStatus: active(u) ? '이용중' : '미이용' })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '회원 목록을 조회했습니다.')
   }],
   ['GET', /^\/admin\/members\/(\d+)$/, ['ADMIN'], p => {
     const u = userById(Number(p[0]))
@@ -885,7 +888,7 @@ const routes = [
       (!q.userId || r.userId === Number(q.userId)) && (!q.trainerId || r.trainerId === Number(q.trainerId)) && (!q.ptType || q.ptType === '전체' || v.ptType === q.ptType) && (!q.status || q.status === '전체' || r.status === q.status) && inRange(r.lessonDate, q.startDate, q.endDate)
     ).sort((a, c) => (c.r.lessonDate + c.r.startTime).localeCompare(a.r.lessonDate + a.r.startTime))
     const pg = page(list, q.page, q.size)
-    return ok({ reservations: pg.items.map(({ r, v }) => ({ reservationId: r.id, userId: r.userId, userName: userById(r.userId)?.name, trainerId: r.trainerId, trainerName: v.trainerName, ptType: v.ptType, ptPassId: r.ptPassId, groupClassId: v.groupClassId, className: v.className, lessonDate: r.lessonDate, startTime: r.startTime, endTime: r.endTime, status: r.status, isDeducted: r.isDeducted, reservedAt: r.reservedAt, canceledBy: r.canceledBy, cancelReason: r.cancelReason, canceledAt: r.canceledAt })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '전체 PT 예약 목록을 조회했습니다.')
+    return ok({ reservations: pg.items.map(({ r, v }) => ({ reservationId: r.id, userId: r.userId, userName: userById(r.userId)?.name, userPhone: userById(r.userId)?.phone, trainerId: r.trainerId, trainerName: v.trainerName, ptType: v.ptType, ptPassId: r.ptPassId, groupClassId: v.groupClassId, className: v.className, lessonDate: r.lessonDate, startTime: r.startTime, endTime: r.endTime, status: r.status, isDeducted: r.isDeducted, reservedAt: r.reservedAt, canceledBy: r.canceledBy, cancelReason: r.cancelReason, canceledAt: r.canceledAt })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '전체 PT 예약 목록을 조회했습니다.')
   }],
   ['POST', /^\/admin\/pt-reservations\/(\d+)\/cancel$/, ['ADMIN'], (p, q, b) => {
     const r = db.reservations.find(x => x.id === Number(p[0]))
