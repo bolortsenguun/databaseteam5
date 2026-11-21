@@ -280,6 +280,18 @@ function trainerOfPath(params, ctx) {
 
 const PUBLIC = ['/auth/login', '/auth/register', '/auth/check-login-id', '/kiosk/checkins']
 
+// 회원권 + PT 이용권 (내 이용권, 관리자 회원 상세 공용)
+function passesOf(uid) {
+  const t = todayS()
+  const memberships = db.memberships.filter(m => m.userId === uid).sort((a, c) => a.startDate.localeCompare(c.startDate) || a.id - c.id).map(m => {
+    const status = membershipStatus(m)
+    const product = db.membershipProducts.find(x => x.id === m.productId)
+    return { membershipId: m.id, productId: m.productId, productName: product?.name, startDate: m.startDate, endDate: m.endDate, status, price: m.price ?? product?.price ?? null, remainingDays: status === '이용중' ? Math.round((pd(m.endDate) - pd(t)) / 86400000) : 0 }
+  })
+  const ptPasses = db.ptPasses.filter(x => x.userId === uid).sort((a, c) => a.startDate.localeCompare(c.startDate) || a.id - c.id).map(passView)
+  return { memberships, ptPasses }
+}
+
 const routes = [
   ['POST', /^\/auth\/login$/, null, (p, q, b) => {
     const u = db.users.find(x => x.loginId === b.loginId)
@@ -337,12 +349,12 @@ const routes = [
   ['GET', /^\/admin\/members\/(\d+)$/, ['ADMIN'], p => {
     const u = userById(Number(p[0]))
     if (!u || u.role !== 'MEMBER') fail(404, 'USER_NOT_FOUND', '해당 사용자를 찾을 수 없습니다.')
-    return ok(userResponse(u), '회원 정보를 조회했습니다.')
+    return ok({ ...userResponse(u), ...passesOf(u.id) }, '회원 정보를 조회했습니다.')
   }],
   ['PATCH', /^\/admin\/members\/(\d+)$/, ['ADMIN'], (p, q, b) => {
     const u = userById(Number(p[0]))
     if (!u || u.role !== 'MEMBER') fail(404, 'USER_NOT_FOUND', '해당 사용자를 찾을 수 없습니다.')
-    return ok(userResponse(updateProfile(u, b)), '회원 정보가 수정되었습니다.')
+    return ok({ ...userResponse(updateProfile(u, b)), ...passesOf(u.id) }, '회원 정보가 수정되었습니다.')
   }],
 
   ['GET', /^\/products$/, ['MEMBER'], () => ok({
@@ -426,15 +438,7 @@ const routes = [
     return ok({ payments: pg.items.map(x => ({ paymentId: x.id, userId: x.userId, userName: userById(x.userId)?.name, amount: x.amount, status: x.status, paidAt: x.paidAt, ...paymentProduct(x) })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '전체 결제 내역을 조회했습니다.')
   }],
 
-  ['GET', /^\/passes\/me$/, ['MEMBER'], (p, q, b, ctx) => {
-    const t = todayS()
-    const memberships = db.memberships.filter(m => m.userId === ctx.uid).sort((a, c) => a.startDate.localeCompare(c.startDate) || a.id - c.id).map(m => {
-      const status = membershipStatus(m)
-      return { membershipId: m.id, productId: m.productId, productName: db.membershipProducts.find(x => x.id === m.productId)?.name, startDate: m.startDate, endDate: m.endDate, status, remainingDays: status === '이용중' ? Math.round((pd(m.endDate) - pd(t)) / 86400000) : null }
-    })
-    const ptPasses = db.ptPasses.filter(x => x.userId === ctx.uid).sort((a, c) => a.startDate.localeCompare(c.startDate) || a.id - c.id).map(passView)
-    return ok({ memberships, ptPasses }, '내 이용권을 조회했습니다.')
-  }],
+  ['GET', /^\/passes\/me$/, ['MEMBER'], (p, q, b, ctx) => ok(passesOf(ctx.uid), '내 이용권을 조회했습니다.')],
   ['GET', /^\/trainers\/me\/clients$/, ['TRAINER'], (p, q, b, ctx) => {
     const passes = db.ptPasses.filter(x => x.trainerId === ctx.uid && x.ptType === '개인' && passStatus(x) !== '만료')
     const map = new Map()
