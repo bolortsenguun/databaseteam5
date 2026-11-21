@@ -21,7 +21,7 @@ export default function AdminMembers() {
       <Async state={list} isEmpty={d => d.members.length === 0} empty={q.keyword ? '검색 결과가 없어요.' : '가입한 회원이 없어요.'}>
         {d => (
           <div className="card">
-            <span className="muted small">전체 {d.totalElements}명</span>
+            <span className="muted small">전체 {d.totalCount}명</span>
             <div className="tblwrap">
               <table className="tbl">
                 <thead><tr><th>이름</th><th>아이디</th><th>전화번호</th><th>성별</th><th>가입일</th></tr></thead>
