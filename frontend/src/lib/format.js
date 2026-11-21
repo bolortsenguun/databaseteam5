@@ -141,3 +141,6 @@ export const REASON_LONG = {
   ALREADY_RESERVED: '이미 신청한 수업이에요.',
   CLASS_FULL: '정원이 다 찼어요.'
 }
+
+// 그룹 수업 '오늘 할 운동' (백엔드 GroupClassService.WORKOUTS와 같은 목록)
+export const GROUP_WORKOUTS = ['서킷', '하체', '상체', '코어', '전신', '스트레칭', '러닝', '케틀벨', '데드리프트', '힙·브릿지']
