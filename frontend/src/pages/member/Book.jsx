@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { trainers as trainersApi, reservations, groups, passes } from '../../api/endpoints'
 import { useAsync, useSafeAsync } from '../../lib/hooks'
 import { Async, Badge, Confirm, Empty, ErrorBox, Loading, PageTitle, Tabs, useToast } from '../../components/ui'
-import { addDays, fmtMD, fmtMDShort, reasonText, REASON_LONG, today } from '../../lib/format'
+import { addDays, fmtMD, fmtMDShort, GROUP_WORKOUTS, reasonText, REASON_LONG, statusText, today } from '../../lib/format'
 import { useSettings } from '../../lib/settings'
 
 
@@ -141,6 +141,47 @@ function Personal({ myPasses, initialTrainer }) {
   )
 }
 
+// 운동 종류마다 다른 색 (사진이 없을 때 배경)
+function workoutHue(w) {
+  const i = GROUP_WORKOUTS.indexOf(w)
+  return i < 0 ? 230 : (200 + i * 37) % 360
+}
+
+function GroupCard({ c, onPick }) {
+  const mine = c.unavailableReason === 'ALREADY_RESERVED'
+  const h = workoutHue(c.workout)
+  return (
+    <div className={`card gcard ${mine ? 'mine' : ''}`}>
+      <div className="gcard-media" style={c.imageUrl ? undefined : { background: `linear-gradient(135deg, hsl(${h} 42% 34%), hsl(${(h + 50) % 360} 40% 16%))` }}>
+        {c.imageUrl ? <img src={c.imageUrl} alt={`${c.name} 수업 사진`} loading="lazy" /> : <span className="gcard-ph" aria-hidden="true">fatenexx</span>}
+        <div className="gcard-top">
+          {c.workout ? <span className="gchip">{c.workout}</span> : <span />}
+          {mine ? <span className="gchip ok">신청함 ✓</span> : <span className="gchip">{statusText(c.status)}</span>}
+        </div>
+        <div className="gcard-time">
+          <span className="gcard-date">{fmtMD(c.classDate)}</span>
+          <div><b>{c.startTime}</b><span> ~ {c.endTime}</span></div>
+        </div>
+      </div>
+      <div className="gcard-body">
+        <div className="stack" style={{ gap: 2 }}>
+          <b style={{ fontSize: 18 }}>{c.name}</b>
+          <span className="muted small">{c.trainerName} 트레이너 · 60분</span>
+        </div>
+        {c.description && <p className="muted gcard-desc">{c.description}</p>}
+        <span className="muted small">신청 <b className="num" style={{ color: 'var(--text)' }}>{c.currentParticipants} / {c.capacity}</b>명</span>
+        {c.canReserve ? (
+          <button className="btn primary" onClick={onPick}>신청하기</button>
+        ) : mine ? (
+          <Link to="/member/reservations" className="btn">내 예약에서 보기</Link>
+        ) : (
+          <button className="btn" disabled title={REASON_LONG[c.unavailableReason] || ''}>{reasonText(c.unavailableReason)}</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Group({ myPasses }) {
   const toast = useToast()
   const S = useSettings()
@@ -173,44 +214,17 @@ function Group({ myPasses }) {
     <>
       {myPasses.data && (
         <div className="alert small row between">
-          <span>그룹 PT 잔여 <b className="num">{avail}</b>회 · 수업이 폐강되면 횟수는 차감되지 않아요.</span>
+          <span>그룹 PT 잔여 <b className="num">{avail}</b>회 · 최소 {S.GROUP_MIN_PARTICIPANTS}명이 안 모이면 수업 {S.GROUP_CONFIRM_HOURS}시간 전에 폐강되고, 그때는 횟수가 차감되지 않아요.</span>
           {gp.length === 0 && <Link to="/member/shop?type=group" className="btn sm">그룹 PT 구매</Link>}
         </div>
       )}
       <Async state={list} isEmpty={d => d.classes.length === 0} empty="지금 신청할 수 있는 그룹 수업이 없어요.">
         {d => {
-          const byDate = d.classes.reduce((m, c) => ((m[c.classDate] ||= []).push(c), m), {})
-          return Object.entries(byDate).map(([date, cs]) => (
-            <section key={date} className="stack">
-              <h2 className="sec">{fmtMD(date)}</h2>
-              <div className="grid g2">
-                {cs.map(c => (
-                  <div key={c.classId} className="card">
-                    {c.imageUrl && <img className="gimg" src={c.imageUrl} alt={`${c.name} 수업 사진`} loading="lazy" />}
-                    <div className="row between">
-                      <div className="stack" style={{ gap: 4 }}>
-                        <b style={{ fontSize: 18 }}>{c.name}</b>
-                        <span className="muted small">{c.trainerName} 트레이너</span>
-                      </div>
-                      <Badge s={c.status} />
-                    </div>
-                    {c.workout && <span className="muted small">오늘 할 운동 <Badge tone="info">{c.workout}</Badge></span>}
-                    <div className="row between">
-                      <span className="stat">{c.startTime}</span>
-                      <span className="muted">신청 <b className="num" style={{ color: 'var(--text)' }}>{c.currentParticipants} / {c.capacity}</b>명</span>
-                    </div>
-                    {c.description && <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>{c.description}</p>}
-                    <span className="dim small">최소 {S.GROUP_MIN_PARTICIPANTS}명 모집 · 수업 {S.GROUP_CONFIRM_HOURS}시간 전까지 미달이면 폐강돼요.</span>
-                    {c.canReserve ? (
-                      <button className="btn primary" onClick={() => { setErr(''); setPick(c) }}>신청하기</button>
-                    ) : (
-                      <button className="btn" disabled title={REASON_LONG[c.unavailableReason] || ''}>{reasonText(c.unavailableReason)}</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))
+          return (
+            <div className="gcards">
+              {d.classes.map(c => <GroupCard key={c.classId} c={c} onPick={() => { setErr(''); setPick(c) }} />)}
+            </div>
+          )
         }}
       </Async>
       {pick && (
