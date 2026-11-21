@@ -280,6 +280,14 @@ function trainerOfPath(params, ctx) {
 
 const PUBLIC = ['/auth/login', '/auth/register', '/auth/check-login-id', '/kiosk/checkins']
 
+// 그룹 수업 운동 종류·사진 검사 (백엔드 GroupClassService와 같은 규칙)
+const MOCK_WORKOUTS = ['서킷', '하체', '상체', '코어', '전신', '스트레칭', '러닝', '케틀벨', '데드리프트', '힙·브릿지']
+function checkVisual(b) {
+  if (b.workout && !MOCK_WORKOUTS.includes(b.workout)) fail(400, 'INVALID_INPUT', `운동 종류는 ${MOCK_WORKOUTS.join(', ')} 중에서 선택해 주세요.`)
+  if (b.imageUrl && !b.imageUrl.startsWith('data:image/')) fail(400, 'INVALID_INPUT', '수업 사진은 이미지 파일만 올릴 수 있습니다.')
+  if (b.imageUrl && b.imageUrl.length > 1500000) fail(400, 'INVALID_INPUT', '수업 사진 용량이 너무 큽니다.')
+}
+
 // 회원권 + PT 이용권 (내 이용권, 관리자 회원 상세 공용)
 function passesOf(uid) {
   const t = todayS()
@@ -657,7 +665,7 @@ const routes = [
       classes: list.map(g => {
         const cur = db.reservations.filter(r => r.groupClassId === g.id && r.status !== '취소').length
         const reason = groupReason(ctx.uid, g)
-        return { classId: g.id, name: g.name, description: g.description, trainerId: g.trainerId, trainerName: userById(g.trainerId)?.name, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: cur, remainingSeats: g.capacity - cur, status: g.status, canReserve: !reason, unavailableReason: reason }
+        return { classId: g.id, name: g.name, description: g.description, workout: g.workout || null, imageUrl: g.imageUrl || null, trainerId: g.trainerId, trainerName: userById(g.trainerId)?.name, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: cur, remainingSeats: g.capacity - cur, status: g.status, canReserve: !reason, unavailableReason: reason }
       })
     }, '그룹 수업 목록을 조회했습니다.')
   }],
@@ -669,7 +677,7 @@ const routes = [
     return ok({
       classes: list.map(g => {
         const parts = db.reservations.filter(r => r.groupClassId === g.id && r.status !== '취소').map(r => ({ reservationId: r.id, userId: r.userId, name: userById(r.userId)?.name, reservationStatus: r.status }))
-        return { classId: g.id, name: g.name, description: g.description, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: parts.length, status: g.status, participants: parts }
+        return { classId: g.id, name: g.name, description: g.description, workout: g.workout || null, imageUrl: g.imageUrl || null, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: parts.length, status: g.status, participants: parts }
       })
     }, '내 그룹 수업 목록을 조회했습니다.')
   }],
@@ -680,14 +688,17 @@ const routes = [
   ['POST', /^\/group-classes$/, ['TRAINER'], (p, q, b, ctx) => {
     if (!b.name || !b.classDate || !b.startTime || ![4, 5, 6].includes(b.capacity)) fail(400, 'INVALID_INPUT', '입력값을 확인해 주세요.')
     if ((b.description || '').length > 200) fail(400, 'INVALID_INPUT', '설명은 200자 이하로 입력해 주세요.')
+    checkVisual(b)
     const slot = trainerSlotsForGroup(ctx.uid, b.classDate).find(s => s.startTime === b.startTime)
     if (!slot) fail(409, 'TRAINER_UNAVAILABLE', '해당 시간에는 그룹 수업을 개설할 수 없습니다.')
     if (slot.unavailableReason === 'OUTSIDE_OPENING_RANGE') fail(400, 'INVALID_CLASS_DATE', '그룹 수업을 개설할 수 없는 날짜입니다.')
     if (slot.unavailableReason === 'DAY_OFF') fail(409, 'TRAINER_UNAVAILABLE', '해당 시간에는 그룹 수업을 개설할 수 없습니다.')
     if (slot.unavailableReason) fail(409, 'CLASS_TIME_CONFLICT', '해당 시간에 다른 PT 예약 또는 그룹 수업이 있습니다.')
     const g = { id: nextId(db.groupClasses), trainerId: ctx.uid, name: b.name, description: b.description || null, classDate: b.classDate, startTime: b.startTime, endTime: hh(toH(b.startTime) + 1), capacity: b.capacity, status: '개설', cancelReason: null, canceledAt: null, createdAt: isoDT(now()) }
+    g.workout = b.workout || null
+    g.imageUrl = b.imageUrl || null
     db.groupClasses.push(g)
-    return ok({ classId: g.id, trainerId: g.trainerId, name: g.name, description: g.description, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: 0, status: g.status }, '그룹 수업이 개설되었습니다.', 201)
+    return ok({ classId: g.id, trainerId: g.trainerId, name: g.name, description: g.description, workout: g.workout || null, imageUrl: g.imageUrl || null, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: 0, status: g.status }, '그룹 수업이 개설되었습니다.', 201)
   }],
   ['PATCH', /^\/group-classes\/(\d+)$/, ['TRAINER'], (p, q, b, ctx) => {
     const g = db.groupClasses.find(x => x.id === Number(p[0]) && x.trainerId === ctx.uid)
@@ -709,7 +720,10 @@ const routes = [
     if (b.name) g.name = b.name
     if (b.description !== undefined && b.description !== null) g.description = b.description === '' ? null : b.description
     if (b.capacity) g.capacity = b.capacity
-    return ok({ classId: g.id, trainerId: g.trainerId, name: g.name, description: g.description, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: 0, status: g.status }, '그룹 수업이 수정되었습니다.')
+    checkVisual(b)
+    if (b.workout !== undefined && b.workout !== null) g.workout = b.workout || null      // '' = 지우기
+    if (b.imageUrl !== undefined && b.imageUrl !== null) g.imageUrl = b.imageUrl || null
+    return ok({ classId: g.id, trainerId: g.trainerId, name: g.name, description: g.description, workout: g.workout || null, imageUrl: g.imageUrl || null, classDate: g.classDate, startTime: g.startTime, endTime: g.endTime, capacity: g.capacity, currentParticipants: 0, status: g.status }, '그룹 수업이 수정되었습니다.')
   }],
   ['DELETE', /^\/group-classes\/(\d+)$/, ['TRAINER'], (p, q, b, ctx) => {
     const g = db.groupClasses.find(x => x.id === Number(p[0]) && x.trainerId === ctx.uid)

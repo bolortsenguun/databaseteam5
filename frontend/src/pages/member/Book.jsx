@@ -181,6 +181,7 @@ function Group({ myPasses }) {
               <div className="grid g2">
                 {cs.map(c => (
                   <div key={c.classId} className="card">
+                    {c.imageUrl && <img className="gimg" src={c.imageUrl} alt={`${c.name} 수업 사진`} loading="lazy" />}
                     <div className="row between">
                       <div className="stack" style={{ gap: 4 }}>
                         <b style={{ fontSize: 18 }}>{c.name}</b>
@@ -188,6 +189,7 @@ function Group({ myPasses }) {
                       </div>
                       <Badge s={c.status} />
                     </div>
+                    {c.workout && <span className="muted small">오늘 할 운동 <Badge tone="info">{c.workout}</Badge></span>}
                     <div className="row between">
                       <span className="stat">{c.startTime}</span>
                       <span className="muted">신청 <b className="num" style={{ color: 'var(--text)' }}>{c.currentParticipants} / {c.capacity}</b>명</span>
@@ -210,6 +212,7 @@ function Group({ myPasses }) {
         <Confirm title="이 수업을 신청할까요?" confirmText="신청하기" busy={busy} error={err} onClose={() => setPick(null)} onConfirm={apply}>
           <dl className="kv">
             <dt>수업</dt><dd>{pick.name}</dd>
+            {pick.workout && <><dt>운동</dt><dd>{pick.workout}</dd></>}
             <dt>일시</dt><dd>{fmtMD(pick.classDate)} {pick.startTime}~{pick.endTime}</dd>
             <dt>트레이너</dt><dd>{pick.trainerName}</dd>
             <dt>인원</dt><dd>{pick.currentParticipants + 1} / {pick.capacity}명 (신청 후)</dd>

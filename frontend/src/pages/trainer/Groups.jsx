@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { groups } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
 import { Async, Badge, Confirm, Field, Loading, Modal, PageTitle, Seg, Tabs, useToast } from '../../components/ui'
-import { addDays, fmtMD, nowLocalISO, reasonText, today } from '../../lib/format'
+import { addDays, fmtMD, GROUP_WORKOUTS, nowLocalISO, reasonText, today } from '../../lib/format'
+import { resizeImage } from '../../lib/image'
 import { ReasonCancel } from './Lessons'
 
 export default function TrainerGroups() {
@@ -45,6 +46,7 @@ export default function TrainerGroups() {
               const live = ['개설', '확정'].includes(c.status)
               return (
                 <div key={c.classId} className="card">
+                  {c.imageUrl && <img className="gimg" src={c.imageUrl} alt={`${c.name} 수업 사진`} />}
                   <div className="row between">
                     <div className="stack" style={{ gap: 4 }}>
                       <b style={{ fontSize: 18 }}>{c.name}</b>
@@ -52,6 +54,7 @@ export default function TrainerGroups() {
                     </div>
                     <Badge s={c.status} />
                   </div>
+                  {c.workout && <span className="muted small">오늘 할 운동 <Badge tone="info">{c.workout}</Badge></span>}
                   {c.description && <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>{c.description}</p>}
                   <span>신청 <b className="num">{c.currentParticipants} / {c.capacity}</b>명</span>
                   {c.participants.length > 0 && (
@@ -93,8 +96,11 @@ function ClassForm({ initial, onClose, onSaved }) {
     description: initial?.description || '',
     capacity: initial?.capacity || 4,
     classDate: initial?.classDate || addDays(today(), 3),
-    startTime: initial?.startTime || ''
+    startTime: initial?.startTime || '',
+    workout: initial?.workout || '',
+    imageUrl: initial?.imageUrl || ''
   })
+  const [imgBusy, setImgBusy] = useState(false)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const slots = useAsync(() => (f.classDate ? groups.availableSlots(f.classDate) : Promise.resolve(null)), [f.classDate])
@@ -116,10 +122,12 @@ function ClassForm({ initial, onClose, onSaved }) {
         if (f.capacity !== initial.capacity) body.capacity = f.capacity
         if (f.classDate !== initial.classDate) body.classDate = f.classDate
         if (f.startTime !== initial.startTime) body.startTime = f.startTime
+        if (f.workout !== (initial.workout || '')) body.workout = f.workout          // '' = 지우기
+        if (f.imageUrl !== (initial.imageUrl || '')) body.imageUrl = f.imageUrl     // '' = 지우기
         if (Object.keys(body).length) await groups.update(initial.classId, body)
         toast('수업을 수정했어요.')
       } else {
-        await groups.create({ name: f.name.trim(), description: f.description || null, classDate: f.classDate, startTime: f.startTime, capacity: f.capacity })
+        await groups.create({ name: f.name.trim(), description: f.description || null, classDate: f.classDate, startTime: f.startTime, capacity: f.capacity, workout: f.workout || null, imageUrl: f.imageUrl || null })
         toast('그룹 수업을 열었어요.')
       }
       onSaved()
@@ -131,6 +139,21 @@ function ClassForm({ initial, onClose, onSaved }) {
     }
   }
 
+  const pickImage = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImgBusy(true)
+    setErr('')
+    try {
+      set('imageUrl', await resizeImage(file))
+    } catch (x) {
+      setErr(x.message)
+    } finally {
+      setImgBusy(false)
+    }
+  }
+
   return (
     <Modal title={edit ? '그룹 수업 수정' : '그룹 수업 열기'} onClose={onClose} wide>
       <Field label="수업 이름">
@@ -139,6 +162,25 @@ function ClassForm({ initial, onClose, onSaved }) {
       <Field label="설명 (선택)" hint={`${f.description.length}/200`}>
         <textarea className="textarea" value={f.description} maxLength={200} onChange={e => set('description', e.target.value)} />
       </Field>
+      <div className="grid g2" style={{ gap: 16 }}>
+        <Field label="오늘 할 운동 (선택)">
+          <select className="select" value={f.workout} onChange={e => set('workout', e.target.value)}>
+            <option value="">선택 안 함</option>
+            {GROUP_WORKOUTS.map(w => <option key={w} value={w}>{w}</option>)}
+          </select>
+        </Field>
+        <div className="field">
+          수업 사진 (선택)
+          <div className="gimg-pick">
+            {f.imageUrl && <img className="gimg" src={f.imageUrl} alt="수업 사진 미리보기" />}
+            <label className="btn sm" style={{ cursor: imgBusy ? 'wait' : 'pointer' }}>
+              {imgBusy ? '불러오는 중…' : f.imageUrl ? '사진 바꾸기' : '사진 고르기'}
+              <input type="file" accept="image/*" hidden disabled={imgBusy} onChange={pickImage} />
+            </label>
+            {f.imageUrl && <button type="button" className="btn sm" onClick={() => set('imageUrl', '')}>사진 빼기</button>}
+          </div>
+        </div>
+      </div>
       <div className="grid g2" style={{ gap: 16 }}>
         <Field label="날짜" hint="48시간 뒤부터 30일 안">
           <input className="input" type="date" min={today()} max={addDays(today(), 30)} value={f.classDate} onChange={e => setF(s => ({ ...s, classDate: e.target.value, startTime: edit && e.target.value === initial.classDate ? initial.startTime : '' }))} />
@@ -171,7 +213,7 @@ function ClassForm({ initial, onClose, onSaved }) {
       {err && <div className="alert bad">{err}</div>}
       <div className="row end">
         <button className="btn" onClick={onClose} disabled={busy}>취소</button>
-        <button className="btn primary" onClick={save} disabled={busy}>{busy ? '저장 중…' : edit ? '수정 저장' : '수업 열기'}</button>
+        <button className="btn primary" onClick={save} disabled={busy || imgBusy}>{busy ? '저장 중…' : edit ? '수정 저장' : '수업 열기'}</button>
       </div>
     </Modal>
   )
