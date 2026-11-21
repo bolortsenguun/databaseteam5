@@ -24,7 +24,7 @@ public class KioskController {
     public ResponseEntity<ApiResponse<KioskCheckinResponse>> checkin(
             @Valid @RequestBody KioskCheckinRequest request) {
         KioskCheckinResponse result = attendanceService.checkin(request.phone());
-        HttpStatus status = result.recorded() ? HttpStatus.CREATED : HttpStatus.OK;
+        HttpStatus status = result.duplicate() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status).body(ApiResponse.ok(result, result.message()));
     }
 }

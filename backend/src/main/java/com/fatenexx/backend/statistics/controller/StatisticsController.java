@@ -30,8 +30,11 @@ public class StatisticsController {
 
     @GetMapping("/statistics")
     public ApiResponse<StatisticsResponse> statistics(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return ApiResponse.ok(statisticsService.getStatistics(from, to), "조회되었습니다.");
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,  // 예전 이름
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {  // 예전 이름
+        return ApiResponse.ok(statisticsService.getStatistics(
+                startDate != null ? startDate : from, endDate != null ? endDate : to), "조회되었습니다.");
     }
 }

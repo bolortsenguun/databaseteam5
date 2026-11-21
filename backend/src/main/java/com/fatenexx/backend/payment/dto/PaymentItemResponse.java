@@ -11,6 +11,7 @@ public record PaymentItemResponse(
         String status,
         int amount,
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime paidAt,
+        String productType,             // 회원권 / 개인 PT / 그룹 PT (화면 표시용)
         PurchaseType purchaseType,      // 회원권 / PT
         PtType ptType,                  // PT일 때 개인 / 그룹, 회원권이면 null
         String productName,

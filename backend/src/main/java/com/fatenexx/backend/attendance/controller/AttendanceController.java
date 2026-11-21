@@ -27,12 +27,17 @@ public class AttendanceController {
     @GetMapping("/me")
     public ApiResponse<AttendancePageResponse> myAttendances(
             @Login LoginUser loginUser,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,  // 예전 이름
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,    // 예전 이름
+            @RequestParam(required = false) String entryType,       // 회원권 / PT (없으면 전체)
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(
-                attendanceService.getMyAttendances(loginUser.userId(), from, to, page, size),
+                attendanceService.getMyAttendances(loginUser.userId(),
+                        startDate != null ? startDate : from, endDate != null ? endDate : to,
+                        entryType, page, size),
                 "조회되었습니다.");
     }
 }
