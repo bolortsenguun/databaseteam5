@@ -1,20 +1,24 @@
 import { useState } from 'react'
 import { attendance, payments } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
-import { Async, Badge, PageTitle, Pager } from '../../components/ui'
+import { Async, Badge, PageTitle, Pager, Seg } from '../../components/ui'
 import { fmtDateTime, fmtMoney } from '../../lib/format'
 
 export default function MemberHistory() {
   const [aPage, setAPage] = useState(1)
+  const [entry, setEntry] = useState('전체')
   const [pPage, setPPage] = useState(1)
-  const att = useAsync(() => attendance.mine({ page: aPage, size: 10 }), [aPage])
+  const att = useAsync(() => attendance.mine({ entryType: entry, page: aPage, size: 10 }), [aPage, entry])
   const pay = useAsync(() => payments.mine({ page: pPage, size: 10 }), [pPage])
   return (
     <main className="page">
       <PageTitle title="이용 내역" sub="출석과 결제 기록을 모아서 봐요." />
       <div className="grid g2" style={{ alignItems: 'start' }}>
         <section className="card">
-          <h3>출석 기록</h3>
+          <div className="row between">
+            <h3>출석 기록</h3>
+            <Seg value={entry} options={[['전체', '전체'], ['회원권', '회원권'], ['PT', 'PT']]} onChange={v => { setEntry(v); setAPage(1) }} />
+          </div>
           <Async state={att} isEmpty={d => d.attendances.length === 0} empty="아직 체크인 기록이 없어요.">
             {d => (
               <>

@@ -45,7 +45,7 @@ export default function MemberPasses() {
                       <div key={x.ptPassId} className="card">
                         <div className="row between"><b style={{ fontSize: 18 }}>{x.productName}</b><Badge s={x.status} /></div>
                         <span className="muted">{x.trainerName ? `${x.trainerName} 트레이너, ` : ''}{fmtDate(x.startDate)} ~ {fmtDate(x.endDate)}</span>
-                        <div className="grid" style={{ gap: 12, gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                        <div className="grid g3" style={{ gap: 12 }}>
                           <div><div className="stat">{x.availableCount}</div><span className="muted small">예약 가능</span></div>
                           <div><div className="stat">{x.reservedCount}</div><span className="muted small">예약 중</span></div>
                           <div><div className="stat">{x.usedCount}</div><span className="muted small">사용함</span></div>

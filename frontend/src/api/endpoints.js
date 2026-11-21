@@ -1,5 +1,4 @@
 import { get, post, patch, del, requestRaw } from './client'
-import { normalizeAttendancePage, normalizeClients, normalizeDashboard, normalizeKiosk, normalizePasses, normalizePaymentPage, normalizePaymentResult, normalizeSettings, normalizeStatistics } from './adapters'
 
 export const auth = {
   me: () => get('/auth/me'),
@@ -25,72 +24,36 @@ export const products = {
   updatePt: (id, body) => patch(`/admin/pt-products/${id}`, body)
 }
 
-
 export const payments = {
-  simulate: async ({ kind, productId, trainerId, startDate, success }) => {
-    const body = { purchaseType: kind === 'membership' ? 'MEMBERSHIP' : 'PT', productId, startDate, simulateFail: !success }
-    if (kind === 'personal') body.trainerId = trainerId
-    const r = await requestRaw('POST', '/payments/simulate', { body })
-    return normalizePaymentResult(r.data)
-  },
-  mine: async query => normalizePaymentPage(await get('/payments/me', query), true),
-  // 회원·결과·기간 조건을 서버에서 검색 (page는 1부터)
-  adminList: async query => normalizePaymentPage(await get('/admin/payments', query), true)
+  simulate: body => requestRaw('POST', '/payments/simulate', { body }),
+  mine: query => get('/payments/me', query),
+  adminList: query => get('/admin/payments', query)
 }
 
 export const passes = {
-  mine: async () => normalizePasses(await get('/passes/me')),
-  clients: async () => normalizeClients(await get('/trainers/me/clients'))
+  mine: () => get('/passes/me'),
+  clients: () => get('/trainers/me/clients')
 }
 
 export const attendance = {
-  kiosk: async phone => {
-    const r = await requestRaw('POST', '/kiosk/checkins', { body: { phone } })
-    return normalizeKiosk(r.data)
-  },
-  mine: async query => {
-    const { startDate, endDate, page, size } = query || {}
-    const d = await get('/attendances/me', { from: startDate, to: endDate, startDate, endDate, page: page ?? 1, size })
-    return normalizeAttendancePage(d, true)
-  },
-  // 날짜(하루)·기간·회원·입장 구분 검색과 페이지를 서버에서 처리 (page는 1부터)
-  adminList: async query => normalizeAttendancePage(await get('/admin/attendances', query), true)
+  kiosk: phone => requestRaw('POST', '/kiosk/checkins', { body: { phone } }),
+  mine: query => get('/attendances/me', query),
+  adminList: query => get('/admin/attendances', query)
 }
 
-const safe = p => p.catch(() => null)
-
 export const stats = {
-  dashboard: async () => {
-    const d = await get('/admin/dashboard')
-    if (d.totalMembers !== undefined && d.monthlyRevenue !== undefined) return normalizeDashboard(d)
-    const [pending, approved, mem, st] = await Promise.all([
-      safe(get('/admin/trainers', { approvalStatus: '승인대기', page: 1, size: 1 })),
-      safe(get('/admin/trainers', { approvalStatus: '승인', page: 1, size: 1 })),
-      safe(get('/admin/members', { page: 1, size: 1 })),
-      safe(get('/admin/statistics'))
-    ])
-    return normalizeDashboard(d, {
-      pendingTrainers: pending?.totalCount ?? pending?.totalElements,
-      approvedTrainers: approved?.totalCount ?? approved?.totalElements,
-      totalMembers: mem?.totalElements ?? mem?.totalCount,
-      monthlyRevenue: st ? normalizeStatistics(st).totalRevenue : null
-    })
-  },
-  statistics: async query => {
-    const { startDate, endDate, ...rest } = query || {}
-    return normalizeStatistics(await get('/admin/statistics', { from: startDate, to: endDate, startDate, endDate, ...rest }))
-  }
+  dashboard: () => get('/admin/dashboard'),
+  statistics: query => get('/admin/statistics', query)
 }
 
 export const settings = {
-  get: async () => normalizeSettings(await get('/admin/settings')),
-  save: list => patch('/admin/settings', { settings: list.map(s => ({ key: s.settingKey, value: s.settingValue, settingKey: s.settingKey, settingValue: s.settingValue })) })
+  get: () => get('/admin/settings'),
+  save: list => patch('/admin/settings', { settings: list })
 }
 
 export const trainers = {
   list: () => get('/trainers'),
   adminList: query => get('/admin/trainers', query),
-  adminDetail: id => get(`/admin/trainers/${id}`),
   approve: id => post(`/admin/trainers/${id}/approve`),
   reject: id => post(`/admin/trainers/${id}/reject`),
   adminUpdate: (id, body) => patch(`/admin/trainers/${id}`, body),

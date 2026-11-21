@@ -2,7 +2,18 @@ import { seed } from './mockData'
 
 const MODE = (import.meta.env.VITE_MOCK || 'missing').toLowerCase()
 
-const MISSING = []
+const MISSING = [
+  /^\/payments\//,
+  /^\/admin\/payments/,
+  /^\/passes\/me/,
+  /^\/trainers\/me\/clients/,
+  /^\/kiosk\//,
+  /^\/attendances\//,
+  /^\/admin\/attendances/,
+  /^\/admin\/dashboard/,
+  /^\/admin\/statistics/,
+  /^\/admin\/settings/
+]
 
 export const mockMode = MODE
 
@@ -140,6 +151,17 @@ function passStatus(p) {
 function reservedCount(passId) {
   return db.reservations.filter(r => r.ptPassId === passId && (r.status === '예약' || r.status === '결과대기')).length
 }
+function passView(p) {
+  const status = passStatus(p)
+  const reserved = reservedCount(p.id)
+  const prod = db.ptProducts.find(x => x.id === p.productId)
+  return {
+    ptPassId: p.id, productId: p.productId, productName: prod?.name, ptType: p.ptType, trainerId: p.trainerId,
+    trainerName: p.trainerId ? userById(p.trainerId)?.name : null, startDate: p.startDate, endDate: p.endDate, status,
+    totalCount: p.totalCount, remainingCount: p.remainingCount, reservedCount: reserved,
+    availableCount: status === '만료' ? 0 : Math.max(0, p.remainingCount - reserved), usedCount: p.totalCount - p.remainingCount
+  }
+}
 function usablePass(uid, type, date, trainerId) {
   const list = db.ptPasses.filter(p => p.userId === uid && p.ptType === type && p.startDate <= date && date <= p.endDate && (type === '그룹' || p.trainerId === trainerId))
   if (!list.length) return { reason: type === '그룹' ? 'NO_VALID_GROUP_PASS' : 'NO_VALID_PERSONAL_PASS' }
@@ -230,13 +252,19 @@ function trainerSlotsForGroup(tid, date) {
   return slots.sort((a, b) => a.startTime.localeCompare(b.startTime))
 }
 
-function paymentItemReal(x) {
-  const m = db.memberships.find(y => y.paymentId === x.id)
-  const pt = db.ptPasses.find(y => y.paymentId === x.id)
-  const info = m ? { purchaseType: 'MEMBERSHIP', productName: db.membershipProducts.find(y => y.id === m.productId)?.name, startDate: m.startDate, endDate: m.endDate }
-    : pt ? { purchaseType: 'PT', productName: db.ptProducts.find(y => y.id === pt.productId)?.name, startDate: pt.startDate, endDate: pt.endDate }
-    : { purchaseType: null, productName: null, startDate: null, endDate: null }
-  return { paymentId: x.id, status: x.status === '성공' ? 'SUCCESS' : 'FAIL', amount: x.amount, paidAt: x.paidAt, ...info }
+function membershipStatus(m) {
+  const t = todayS()
+  if (t < m.startDate) return '이용예정'
+  if (t > m.endDate) return '만료'
+  return '이용중'
+}
+
+function paymentProduct(p) {
+  const m = db.memberships.find(x => x.paymentId === p.id)
+  if (m) return { productType: '회원권', productName: db.membershipProducts.find(x => x.id === m.productId)?.name }
+  const pt = db.ptPasses.find(x => x.paymentId === p.id)
+  if (pt) return { productType: pt.ptType === '개인' ? '개인 PT' : '그룹 PT', productName: db.ptProducts.find(x => x.id === pt.productId)?.name }
+  return { productType: null, productName: null }
 }
 
 function membershipDefaultStart(uid) {
@@ -362,179 +390,187 @@ const routes = [
 
   ['POST', /^\/payments\/simulate$/, ['MEMBER'], (p, q, b, ctx) => {
     const uid = ctx.uid
-    if (!['MEMBERSHIP', 'PT'].includes(b.purchaseType) || !b.productId) fail(400, 'INVALID_INPUT', '입력값을 확인해 주세요.')
-    const isM = b.purchaseType === 'MEMBERSHIP'
+    const isM = b.productType === '회원권'
+    if (!['회원권', 'PT'].includes(b.productType) || !b.productId || !b.startDate || !['성공', '실패'].includes(b.simulationResult)) fail(400, 'INVALID_INPUT', '결제 정보를 확인해 주세요.')
     const prod = isM ? db.membershipProducts.find(x => x.id === b.productId) : db.ptProducts.find(x => x.id === b.productId)
     if (!prod) fail(404, 'PRODUCT_NOT_FOUND', '해당 상품을 찾을 수 없습니다.')
-    if (!prod.active) fail(409, 'PRODUCT_NOT_ACTIVE', '판매가 중지된 상품입니다.')
-    if (!isM && prod.ptType === 'PERSONAL') {
-      const t = userById(b.trainerId)
-      if (!t || t.role !== 'TRAINER' || t.approval !== 'APPROVED') fail(404, 'USER_NOT_FOUND', '선택할 수 없는 트레이너입니다.')
-    } else if (!isM && b.trainerId != null) fail(404, 'USER_NOT_FOUND', '그룹 PT는 트레이너를 선택할 수 없습니다.')
+    if (!prod.active) fail(409, 'PRODUCT_INACTIVE', '현재 판매하지 않는 상품입니다.')
     const base = isM ? membershipDefaultStart(uid) : todayS()
-    const start = b.startDate || base
-    if (start < base || start > addD(base, setting('PASS_START_MAX_DAYS'))) fail(400, 'INVALID_START_DATE', '선택할 수 없는 시작일입니다.')
-    const failPay = b.simulateFail === true
-    const pay = { id: nextId(db.payments), userId: uid, amount: prod.price, status: failPay ? '실패' : '성공', paidAt: isoDT(now()) }
-    db.payments.push(pay)
-    const res = (s, e) => ({ paymentId: pay.id, status: failPay ? 'FAIL' : 'SUCCESS', amount: pay.amount, paidAt: pay.paidAt, purchaseType: b.purchaseType, productName: prod.name, startDate: s, endDate: e })
-    if (failPay) return ok(res(null, null), '결제에 실패했습니다.', 200)
+    if (b.startDate < base || b.startDate > addD(base, setting('PASS_START_MAX_DAYS'))) fail(400, 'INVALID_START_DATE', '선택할 수 없는 이용권 시작일입니다.')
+    let endDate
     if (isM) {
-      const m = { id: nextId(db.memberships), userId: uid, productId: prod.id, paymentId: pay.id, startDate: start, endDate: endByMonths(start, prod.months), price: prod.price }
-      db.memberships.push(m)
-      return ok(res(m.startDate, m.endDate), '결제가 완료되었습니다.', 201)
+      endDate = endByMonths(b.startDate, prod.months)
+      if (db.memberships.some(m => m.userId === uid && m.startDate <= endDate && b.startDate <= m.endDate)) fail(409, 'MEMBERSHIP_OVERLAP', '기존 회원권과 이용 기간이 겹칩니다.')
+    } else {
+      endDate = addD(b.startDate, prod.validWeeks * 7 - 1)
+      if (prod.ptType === 'PERSONAL') {
+        const t = userById(b.trainerId)
+        if (!t || t.role !== 'TRAINER' || t.approval !== 'APPROVED') fail(400, 'INVALID_TRAINER', '선택할 수 없는 트레이너입니다.')
+      }
     }
-    const ptType = prod.ptType === 'PERSONAL' ? '개인' : '그룹'
-    const x = { id: nextId(db.ptPasses), userId: uid, ptType, trainerId: ptType === '개인' ? b.trainerId : null, productId: prod.id, paymentId: pay.id, startDate: start, endDate: addD(start, prod.validWeeks * 7 - 1), totalCount: prod.totalCount, remainingCount: prod.totalCount, price: prod.price }
-    db.ptPasses.push(x)
-    return ok(res(x.startDate, x.endDate), '결제가 완료되었습니다.', 201)
+    const pay = { id: nextId(db.payments), userId: uid, amount: prod.price, status: b.simulationResult, paidAt: isoDT(now()) }
+    db.payments.push(pay)
+    if (b.simulationResult === '실패') return ok({ paymentId: pay.id, status: '실패', amount: pay.amount, paidAt: pay.paidAt, pass: null }, '모의결제에 실패했습니다.', 201)
+    let pass
+    if (isM) {
+      const m = { id: nextId(db.memberships), userId: uid, productId: prod.id, paymentId: pay.id, startDate: b.startDate, endDate, price: prod.price }
+      db.memberships.push(m)
+      pass = { passType: '회원권', passId: m.id, startDate: m.startDate, endDate: m.endDate }
+    } else {
+      const ptType = prod.ptType === 'PERSONAL' ? '개인' : '그룹'
+      const x = { id: nextId(db.ptPasses), userId: uid, ptType, trainerId: ptType === '개인' ? b.trainerId : null, productId: prod.id, paymentId: pay.id, startDate: b.startDate, endDate, totalCount: prod.totalCount, remainingCount: prod.totalCount, price: prod.price }
+      db.ptPasses.push(x)
+      pass = { passType: 'PT', passId: x.id, ptType, trainerId: x.trainerId, startDate: x.startDate, endDate: x.endDate }
+    }
+    return ok({ paymentId: pay.id, status: '성공', amount: pay.amount, paidAt: pay.paidAt, pass }, '결제가 완료되었습니다.', 201)
   }],
   ['GET', /^\/payments\/me$/, ['MEMBER'], (p, q, b, ctx) => {
-    const list = db.payments.filter(x => x.userId === ctx.uid).sort((a, c) => c.id - a.id)
-    const pg = page(list, q.page ?? 0, q.size, 0)
-    return ok({ payments: pg.items.map(paymentItemReal), page: pg.page, size: pg.size, totalElements: pg.total, totalPages: pg.totalPages }, '조회되었습니다.')
+    const list = db.payments.filter(x => x.userId === ctx.uid).sort((a, c) => c.paidAt.localeCompare(a.paidAt) || c.id - a.id)
+    const pg = page(list, q.page, q.size)
+    return ok({ payments: pg.items.map(x => ({ paymentId: x.id, amount: x.amount, status: x.status, paidAt: x.paidAt, ...paymentProduct(x) })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '결제 내역을 조회했습니다.')
   }],
   ['GET', /^\/admin\/payments$/, ['ADMIN'], (p, q) => {
-    const list = [...db.payments].sort((a, c) => c.id - a.id)
-    const pg = page(list, q.page ?? 0, q.size, 0)
-    return ok({ payments: pg.items.map(x => { const u = userById(x.userId); const v = paymentItemReal(x); return { paymentId: v.paymentId, userId: x.userId, loginId: u?.loginId, userName: u?.name, ...v } }), page: pg.page, size: pg.size, totalElements: pg.total, totalPages: pg.totalPages }, '조회되었습니다.')
+    if (q.startDate && q.endDate && q.startDate > q.endDate) fail(400, 'INVALID_INPUT', '올바른 검색 조건을 입력해 주세요.')
+    const list = db.payments.filter(x => (!q.status || q.status === '전체' || x.status === q.status) && (!q.userId || x.userId === Number(q.userId)) && inRange(x.paidAt, q.startDate, q.endDate)).sort((a, c) => c.paidAt.localeCompare(a.paidAt) || c.id - a.id)
+    const pg = page(list, q.page, q.size)
+    return ok({ payments: pg.items.map(x => ({ paymentId: x.id, userId: x.userId, userName: userById(x.userId)?.name, amount: x.amount, status: x.status, paidAt: x.paidAt, ...paymentProduct(x) })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '전체 결제 내역을 조회했습니다.')
   }],
 
   ['GET', /^\/passes\/me$/, ['MEMBER'], (p, q, b, ctx) => {
     const t = todayS()
-    const memberships = db.memberships.filter(m => m.userId === ctx.uid).sort((a, c) => c.startDate.localeCompare(a.startDate) || c.id - a.id).map(m => ({
-      membershipId: m.id, productName: db.membershipProducts.find(x => x.id === m.productId)?.name, startDate: m.startDate, endDate: m.endDate,
-      status: m.endDate < t ? 'EXPIRED' : m.startDate > t ? 'BEFORE_START' : 'ACTIVE'
-    }))
-    const ptPasses = db.ptPasses.filter(x => x.userId === ctx.uid).sort((a, c) => c.startDate.localeCompare(a.startDate) || c.id - a.id).map(x => {
-      const reserved = reservedCount(x.id)
-      return {
-        ptPassId: x.id, ptType: x.ptType === '개인' ? 'PERSONAL' : 'GROUP', productName: db.ptProducts.find(y => y.id === x.productId)?.name,
-        trainerId: x.trainerId, trainerName: x.trainerId ? userById(x.trainerId)?.name : null, startDate: x.startDate, endDate: x.endDate,
-        totalCount: x.totalCount, remainingCount: x.remainingCount, reservedCount: reserved, availableCount: Math.max(0, x.remainingCount - reserved),
-        status: x.endDate < t ? 'EXPIRED' : x.remainingCount <= 0 ? 'EXHAUSTED' : x.startDate > t ? 'BEFORE_START' : 'ACTIVE'
-      }
+    const memberships = db.memberships.filter(m => m.userId === ctx.uid).sort((a, c) => a.startDate.localeCompare(c.startDate) || a.id - c.id).map(m => {
+      const status = membershipStatus(m)
+      return { membershipId: m.id, productId: m.productId, productName: db.membershipProducts.find(x => x.id === m.productId)?.name, startDate: m.startDate, endDate: m.endDate, status, remainingDays: status === '이용중' ? Math.round((pd(m.endDate) - pd(t)) / 86400000) : null }
     })
-    return ok({ memberships, ptPasses }, '조회되었습니다.')
+    const ptPasses = db.ptPasses.filter(x => x.userId === ctx.uid).sort((a, c) => a.startDate.localeCompare(c.startDate) || a.id - c.id).map(passView)
+    return ok({ memberships, ptPasses }, '내 이용권을 조회했습니다.')
   }],
   ['GET', /^\/trainers\/me\/clients$/, ['TRAINER'], (p, q, b, ctx) => {
-    const t = todayS()
-    const list = db.ptPasses.filter(x => x.trainerId === ctx.uid && x.endDate >= t)
+    const passes = db.ptPasses.filter(x => x.trainerId === ctx.uid && x.ptType === '개인' && passStatus(x) !== '만료')
     const map = new Map()
-    for (const x of list) {
+    for (const x of passes) {
       if (!map.has(x.userId)) {
         const u = userById(x.userId)
-        map.set(x.userId, { userId: u.id, name: u.name, phone: u.phone, birthDate: u.birthDate, gender: u.gender, passes: [] })
+        map.set(x.userId, { userId: u.id, name: u.name, phone: u.phone, ptPasses: [] })
       }
-      map.get(x.userId).passes.push({ ptPassId: x.id, productName: db.ptProducts.find(y => y.id === x.productId)?.name, startDate: x.startDate, endDate: x.endDate, totalCount: x.totalCount, remainingCount: x.remainingCount })
+      const v = passView(x)
+      map.get(x.userId).ptPasses.push({ ptPassId: v.ptPassId, productName: v.productName, startDate: v.startDate, endDate: v.endDate, status: v.status, totalCount: v.totalCount, remainingCount: v.remainingCount, reservedCount: v.reservedCount, availableCount: v.availableCount, usedCount: v.usedCount })
     }
-    return ok({ clients: [...map.values()] }, '조회되었습니다.')
+    const clients = [...map.values()]
+    return ok({ clients, totalClients: clients.length }, '담당 회원 목록을 조회했습니다.')
   }],
 
   ['POST', /^\/kiosk\/checkins$/, null, (p, q, b) => {
-    if (!/^[0-9]{10,11}$/.test(b.phone || '')) fail(400, 'INVALID_INPUT', '전화번호는 숫자 10~11자리여야 합니다.')
+    if (!/^010[0-9]{8}$/.test(b.phone || '')) fail(400, 'INVALID_INPUT', '전화번호 8자리를 정확히 입력해 주세요.')
     const u = db.users.find(x => x.phone === b.phone && x.role === 'MEMBER')
-    if (!u) fail(404, 'USER_NOT_FOUND', '등록되지 않은 전화번호입니다.')
-    const masked = u.name.length <= 1 ? u.name : u.name.length === 2 ? u.name[0] + '*' : u.name[0] + '*'.repeat(u.name.length - 2) + u.name[u.name.length - 1]
+    if (!u) fail(403, 'ENTRY_NOT_ALLOWED', '현재 입장 가능한 회원권 또는 PT 예약이 없습니다.')
     const n = now()
     const last = db.attendances.filter(a => a.userId === u.id).sort((a, c) => c.checkedInAt.localeCompare(a.checkedInAt))[0]
     if (last && (n - new Date(last.checkedInAt)) / 60000 < setting('RECHECKIN_MINUTES')) {
-      return ok({ userName: masked, entryType: last.entryType === 'PT' ? 'PT' : 'MEMBERSHIP', reservationId: last.reservationId, checkedInAt: last.checkedInAt, recorded: false, message: '이미 입장 처리되었습니다.' }, '이미 입장 처리되었습니다.')
+      return ok({ attendanceId: last.id, name: u.name, entryType: last.entryType, reservationId: last.reservationId, checkedInAt: last.checkedInAt, duplicate: true }, '이미 체크인되었습니다.')
     }
     const t = todayS()
-    const before = setting('PT_ENTRY_BEFORE_MINUTES')
-    const after = setting('PT_ENTRY_AFTER_MINUTES')
-    const todays = db.reservations.filter(r => r.userId === u.id && r.lessonDate === t && r.status === '예약').sort((a, c) => a.startTime.localeCompare(c.startTime))
-    let matched = null
-    let nextOpen = null
-    for (const r of todays) {
-      const st = dt(r.lessonDate, r.startTime)
-      const open = new Date(st - before * 60000)
-      const close = new Date(st.getTime() + after * 60000)
-      if (n >= open && n <= close) { matched = r; break }
-      if (n < open && !nextOpen) nextOpen = open
+    const hasM = db.memberships.some(m => m.userId === u.id && m.startDate <= t && t <= m.endDate)
+    let entryType = '회원권'
+    let reservationId = null
+    if (!hasM) {
+      const before = setting('PT_ENTRY_BEFORE_MINUTES')
+      const after = setting('PT_ENTRY_AFTER_MINUTES')
+      const todays = db.reservations.filter(r => r.userId === u.id && r.lessonDate === t && r.status !== '취소')
+      const okR = todays.find(r => {
+        const st = dt(r.lessonDate, r.startTime)
+        return n >= st - before * 60000 && n <= st.getTime() + after * 60000
+      })
+      if (!okR) {
+        const future = todays.find(r => dt(r.lessonDate, r.startTime) - before * 60000 > n)
+        if (future) {
+          const open = new Date(dt(future.lessonDate, future.startTime) - before * 60000)
+          fail(403, 'ENTRY_TIME_RESTRICTED', `${pad(open.getHours())}:${pad(open.getMinutes())}부터 입장할 수 있습니다.`)
+        }
+        fail(403, 'ENTRY_NOT_ALLOWED', '현재 입장 가능한 회원권 또는 PT 예약이 없습니다.')
+      }
+      entryType = 'PT'
+      reservationId = okR.id
     }
-    if (matched) {
-      const a = { id: nextId(db.attendances), userId: u.id, checkedInAt: isoDT(n), entryType: 'PT', reservationId: matched.id }
-      db.attendances.push(a)
-      return ok({ userName: masked, entryType: 'PT', reservationId: matched.id, checkedInAt: a.checkedInAt, recorded: true, message: 'PT 수업 입장이 처리되었습니다.' }, 'PT 수업 입장이 처리되었습니다.', 201)
-    }
-    if (db.memberships.some(m => m.userId === u.id && m.startDate <= t && t <= m.endDate)) {
-      const a = { id: nextId(db.attendances), userId: u.id, checkedInAt: isoDT(n), entryType: '회원권', reservationId: null }
-      db.attendances.push(a)
-      return ok({ userName: masked, entryType: 'MEMBERSHIP', reservationId: null, checkedInAt: a.checkedInAt, recorded: true, message: '입장이 처리되었습니다.' }, '입장이 처리되었습니다.', 201)
-    }
-    if (nextOpen) fail(403, 'ENTRY_NOT_ALLOWED', `PT 입장 가능 시각은 ${pad(nextOpen.getHours())}:${pad(nextOpen.getMinutes())}입니다.`)
-    fail(403, 'ENTRY_NOT_ALLOWED', '입장 가능한 이용권이 없습니다. 데스크에 문의해 주세요.')
+    const a = { id: nextId(db.attendances), userId: u.id, checkedInAt: isoDT(n), entryType, reservationId }
+    db.attendances.push(a)
+    return ok({ attendanceId: a.id, name: u.name, entryType, reservationId, checkedInAt: a.checkedInAt, duplicate: false }, '체크인되었습니다.', 201)
   }],
   ['GET', /^\/attendances\/me$/, ['MEMBER'], (p, q, b, ctx) => {
-    const f = q.from || '2000-01-01'
-    const t = q.to || '2100-01-01'
-    if (f > t) fail(400, 'INVALID_INPUT', '시작일이 종료일보다 늦을 수 없습니다.')
-    const list = db.attendances.filter(a => a.userId === ctx.uid && inRange(a.checkedInAt, f, t)).sort((a, c) => c.checkedInAt.localeCompare(a.checkedInAt))
-    const pg = page(list, q.page ?? 0, q.size, 0)
-    return ok({ attendances: pg.items.map(a => ({ attendanceId: a.id, checkedInAt: a.checkedInAt, entryType: a.entryType === 'PT' ? 'PT' : 'MEMBERSHIP', reservationId: a.reservationId })), page: pg.page, size: pg.size, totalElements: pg.total, totalPages: pg.totalPages }, '조회되었습니다.')
+    if (q.startDate && q.endDate && q.startDate > q.endDate) fail(400, 'INVALID_INPUT', '출석 이력 조회 조건을 확인해 주세요.')
+    const list = db.attendances.filter(a => a.userId === ctx.uid && inRange(a.checkedInAt, q.startDate, q.endDate) && (!q.entryType || q.entryType === '전체' || a.entryType === q.entryType)).sort((a, c) => c.checkedInAt.localeCompare(a.checkedInAt) || c.id - a.id)
+    const pg = page(list, q.page, q.size)
+    return ok({ attendances: pg.items.map(a => ({ attendanceId: a.id, checkedInAt: a.checkedInAt, entryType: a.entryType, reservationId: a.reservationId })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '내 출석 이력을 조회했습니다.')
   }],
   ['GET', /^\/admin\/attendances$/, ['ADMIN'], (p, q) => {
-    const d = q.date || todayS()
-    const items = db.attendances.filter(a => a.checkedInAt.startsWith(d)).sort((a, c) => c.checkedInAt.localeCompare(a.checkedInAt)).map(a => ({ attendanceId: a.id, userId: a.userId, userName: userById(a.userId)?.name, phone: userById(a.userId)?.phone, checkedInAt: a.checkedInAt, entryType: a.entryType === 'PT' ? 'PT' : 'MEMBERSHIP', reservationId: a.reservationId }))
-    return ok({ date: d, totalCount: items.length, attendances: items }, '조회되었습니다.')
+    if (q.startDate && q.endDate && q.startDate > q.endDate) fail(400, 'INVALID_INPUT', '올바른 출석 조회 조건을 입력해 주세요.')
+    const list = db.attendances.filter(a => (!q.userId || a.userId === Number(q.userId)) && inRange(a.checkedInAt, q.startDate, q.endDate) && (!q.entryType || q.entryType === '전체' || a.entryType === q.entryType)).sort((a, c) => c.checkedInAt.localeCompare(a.checkedInAt) || c.id - a.id)
+    const pg = page(list, q.page, q.size)
+    return ok({ attendances: pg.items.map(a => ({ attendanceId: a.id, userId: a.userId, userName: userById(a.userId)?.name, phone: userById(a.userId)?.phone, checkedInAt: a.checkedInAt, entryType: a.entryType, reservationId: a.reservationId })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '전체 출석 목록을 조회했습니다.')
   }],
 
   ['GET', /^\/admin\/dashboard$/, ['ADMIN'], () => {
     const t = todayS()
+    const ym = t.slice(0, 7)
+    const succ = db.payments.filter(x => x.status === '성공')
+    const members = db.users.filter(u => u.role === 'MEMBER')
     const min = setting('GROUP_MIN_PARTICIPANTS')
     return ok({
-      date: t,
-      todayEntryCount: db.attendances.filter(a => a.checkedInAt.startsWith(t)).length,
-      activeMemberCount: new Set(db.memberships.filter(m => m.startDate <= t && t <= m.endDate).map(m => m.userId)).size,
-      todayPtCount: db.reservations.filter(r => r.lessonDate === t && r.status !== '취소').length,
+      todayRevenue: succ.filter(x => x.paidAt.startsWith(t)).reduce((s, x) => s + x.amount, 0),
+      monthlyRevenue: succ.filter(x => x.paidAt.startsWith(ym)).reduce((s, x) => s + x.amount, 0),
+      totalMembers: members.length,
+      activeMembershipMembers: new Set(db.memberships.filter(m => m.startDate <= t && t <= m.endDate).map(m => m.userId)).size,
+      approvedTrainers: db.users.filter(u => u.role === 'TRAINER' && u.approval === 'APPROVED').length,
+      pendingTrainers: db.users.filter(u => u.role === 'TRAINER' && u.approval === 'PENDING').length,
+      todayReservations: db.reservations.filter(r => r.lessonDate === t && r.status !== '취소').length,
+      todayCheckins: db.attendances.filter(a => a.checkedInAt.startsWith(t)).length,
       pendingResultCount: db.reservations.filter(r => r.status === '결과대기').length,
       closingSoonClassCount: db.groupClasses.filter(g => g.status === '개설' && db.reservations.filter(r => r.groupClassId === g.id && r.status !== '취소').length < min).length,
-      todayRevenue: db.payments.filter(x => x.status === '성공' && x.paidAt.startsWith(t)).reduce((s, x) => s + x.amount, 0)
-    }, '조회되었습니다.')
+      asOf: isoDT(now())
+    }, '관리자 대시보드를 조회했습니다.')
   }],
   ['GET', /^\/admin\/statistics$/, ['ADMIN'], (p, q) => {
     const t = todayS()
-    const f = q.from || `${t.slice(0, 7)}-01`
-    const to = q.to || t
-    if (f > to) fail(400, 'INVALID_INPUT', '시작일이 종료일보다 늦을 수 없습니다.')
+    const start = q.startDate || `${t.slice(0, 7)}-01`
+    const end = q.endDate || endByMonths(`${t.slice(0, 7)}-01`, 1)
+    if (start > end) fail(400, 'INVALID_DATE_RANGE', '통계 조회 기간을 확인해 주세요.')
     const months = new Map()
-    let total = 0
-    for (const x of db.payments.filter(x => x.status === '성공' && inRange(x.paidAt, f, to))) {
+    for (const x of db.payments.filter(x => x.status === '성공' && inRange(x.paidAt, start, end))) {
       const k = x.paidAt.slice(0, 7)
-      const v = months.get(k) || { month: k, revenue: 0, paymentCount: 0 }
-      v.revenue += x.amount
-      v.paymentCount += 1
-      total += x.amount
+      const v = months.get(k) || { month: k, amount: 0, successCount: 0 }
+      v.amount += x.amount
+      v.successCount += 1
       months.set(k, v)
     }
-    const perf = new Map()
-    for (const r of db.reservations.filter(r => inRange(r.lessonDate, f, to))) {
-      const v = perf.get(r.trainerId) || { trainerId: r.trainerId, trainerName: userById(r.trainerId)?.name, attendedCount: 0, absentCount: 0, canceledCount: 0, upcomingCount: 0 }
-      if (r.status === '출석') v.attendedCount++
-      else if (r.status === '결석') v.absentCount++
-      else if (r.status === '취소') v.canceledCount++
-      else v.upcomingCount++
-      perf.set(r.trainerId, v)
-    }
-    const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: db.attendances.filter(a => inRange(a.checkedInAt, f, to) && Number(a.checkedInAt.slice(11, 13)) === h).length }))
-    return ok({ from: f, to, totalRevenue: total, monthlyRevenue: [...months.values()].sort((a, c) => a.month.localeCompare(c.month)), trainerPerformance: [...perf.values()], hourlyEntries: hourly }, '조회되었습니다.')
+    const trainers = db.users.filter(u => u.role === 'TRAINER' && u.approval === 'APPROVED' && (!q.trainerId || u.id === Number(q.trainerId)))
+    const trainerPerformance = trainers.map(tr => {
+      const rs = db.reservations.filter(r => r.trainerId === tr.id && inRange(r.lessonDate, start, end) && ['출석', '결석'].includes(r.status))
+      const ia = rs.filter(r => !r.groupClassId && r.status === '출석').length
+      const ib = rs.filter(r => !r.groupClassId && r.status === '결석').length
+      const ga = rs.filter(r => r.groupClassId && r.status === '출석').length
+      const gb = rs.filter(r => r.groupClassId && r.status === '결석').length
+      return { trainerId: tr.id, trainerName: tr.name, individualAttendanceCount: ia, individualAbsenceCount: ib, groupAttendanceCount: ga, groupAbsenceCount: gb, groupClassesHeld: new Set(rs.filter(r => r.groupClassId).map(r => r.groupClassId)).size, groupParticipantsProcessed: ga + gb, totalProcessedCount: ia + ib + ga + gb }
+    })
+    const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: db.attendances.filter(a => inRange(a.checkedInAt, start, end) && Number(a.checkedInAt.slice(11, 13)) === h).length }))
+    return ok({ period: { startDate: start, endDate: end }, monthlyRevenue: [...months.values()].sort((a, c) => a.month.localeCompare(c.month)), trainerPerformance, hourlyCheckins: hourly }, '관리자 통계를 조회했습니다.')
   }],
-  ['GET', /^\/admin\/settings$/, ['ADMIN'], () => ok({ settings: [...db.settings].sort((a, c) => a.settingKey.localeCompare(c.settingKey)).map(s => ({ key: s.settingKey, value: s.settingValue, description: s.description })) }, '조회되었습니다.')],
+  ['GET', /^\/admin\/settings$/, ['ADMIN'], () => ok({ settings: [...db.settings].sort((a, b) => a.settingKey.localeCompare(b.settingKey)) }, '운영 설정을 조회했습니다.')],
   ['PATCH', /^\/admin\/settings$/, ['ADMIN'], (p, q, b) => {
     const list = b?.settings
-    if (!Array.isArray(list) || !list.length) fail(400, 'INVALID_INPUT', '입력값을 확인해 주세요.')
-    const seen = new Set()
-    for (const c of list) {
-      if (seen.has(c.key)) fail(400, 'INVALID_INPUT', '같은 설정이 중복되었습니다: ' + c.key)
-      seen.add(c.key)
-      if (!db.settings.some(s => s.settingKey === c.key)) fail(400, 'INVALID_INPUT', '존재하지 않는 설정입니다: ' + c.key)
-      if (!Number.isInteger(c.value) || c.value < 0) fail(400, 'INVALID_INPUT', '입력값을 확인해 주세요.')
-      if (['SLOT_MINUTES', 'GROUP_MIN_PARTICIPANTS', 'BOOKING_RANGE_DAYS'].includes(c.key) && c.value < 1) fail(400, 'INVALID_INPUT', c.key + ' 은(는) 1 이상이어야 합니다.')
+    if (!Array.isArray(list) || !list.length) fail(400, 'INVALID_INPUT', '운영 설정값을 확인해 주세요.')
+    const MIN = { CANCEL_DEADLINE_HOURS: 1, FREE_CANCEL_MINUTES: 0, BOOKING_RANGE_DAYS: 1, BOOKING_CLOSE_HOURS: 0, GROUP_OPEN_MIN_HOURS: 1, GROUP_OPEN_MAX_DAYS: 1, GROUP_MIN_PARTICIPANTS: 2, GROUP_CONFIRM_HOURS: 1, PT_ENTRY_BEFORE_MINUTES: 0, PT_ENTRY_AFTER_MINUTES: 0, PASS_START_MAX_DAYS: 0, RECHECKIN_MINUTES: 1 }
+    const keys = new Set()
+    const next = Object.fromEntries(db.settings.map(s => [s.settingKey, s.settingValue]))
+    for (const s of list) {
+      if (!(s.settingKey in MIN)) fail(400, 'INVALID_SETTING_KEY', '변경할 수 없는 설정 항목입니다.')
+      if (keys.has(s.settingKey)) fail(400, 'INVALID_INPUT', '운영 설정값을 확인해 주세요.')
+      keys.add(s.settingKey)
+      if (!Number.isInteger(s.settingValue) || s.settingValue < MIN[s.settingKey]) fail(400, 'INVALID_INPUT', '운영 설정값을 확인해 주세요.')
+      next[s.settingKey] = s.settingValue
     }
-    for (const c of list) db.settings.find(s => s.settingKey === c.key).settingValue = c.value
-    return ok({ settings: [...db.settings].sort((a, c) => a.settingKey.localeCompare(c.settingKey)).map(s => ({ key: s.settingKey, value: s.settingValue, description: s.description })) }, '설정이 변경되었습니다.')
+    if (next.GROUP_MIN_PARTICIPANTS > 4 || next.GROUP_OPEN_MIN_HOURS <= next.GROUP_CONFIRM_HOURS || next.GROUP_OPEN_MAX_DAYS * 24 <= next.GROUP_OPEN_MIN_HOURS) fail(409, 'SETTING_CONFLICT', '설정값 간의 조건이 맞지 않습니다.')
+    for (const s of list) db.settings.find(x => x.settingKey === s.settingKey).settingValue = s.settingValue
+    return ok({ updatedSettings: list.map(s => ({ settingKey: s.settingKey, settingValue: s.settingValue })) }, '운영 설정이 저장되었습니다.')
   }],
 
   ['GET', /^\/trainers$/, ['MEMBER'], () => ok({
