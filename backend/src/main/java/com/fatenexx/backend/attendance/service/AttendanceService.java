@@ -139,7 +139,7 @@ public class AttendanceService {
         LocalDateTime now = LocalDateTime.now(KST);
         LocalDate today = now.toLocalDate();
         return new KioskCheckinResponse(
-                maskedName, entryTypeLabel, reservationId, checkedInAt, recorded, message,
+                maskedName, entryTypeLabel, reservationId, checkedInAt, !recorded, message,
                 user.getName(),
                 buildMembershipInfo(user.getId(), today),
                 buildPtInfo(user.getId(), today, preferredPass),
@@ -210,20 +210,22 @@ public class AttendanceService {
 
     /** 내 출석 기록 (기간 생략 가능) */
     @Transactional(readOnly = true)
-    public AttendancePageResponse getMyAttendances(Long userId, LocalDate from, LocalDate to, int page, int size) {
+    public AttendancePageResponse getMyAttendances(Long userId, LocalDate from, LocalDate to, String entryType,
+                                                   int page, int size) {
         if (page < 1 || size < 1 || size > 100) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "page는 1 이상, size는 1~100 이어야 합니다.");
         }
-        LocalDate f = (from == null) ? LocalDate.of(2000, 1, 1) : from;
-        LocalDate t = (to == null) ? LocalDate.of(2100, 1, 1) : to;
-        if (f.isAfter(t)) {
+        if (from != null && to != null && from.isAfter(to)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "시작일이 종료일보다 늦을 수 없습니다.");
         }
 
+        // 관리자 출석 검색과 같은 쿼리를 본인 것만 조회 (기간·입장 구분 조건은 없으면 무시)
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "checkedInAt"));
-        Page<Attendance> result = attendanceRepository
-                .findByUserIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThan(
-                        userId, f.atStartOfDay(), t.plusDays(1).atStartOfDay(), pageable);
+        Page<Attendance> result = attendanceRepository.searchForAdmin(
+                userId, parseEntryType(entryType),
+                from == null ? null : from.atStartOfDay(),
+                to == null ? null : to.plusDays(1).atStartOfDay(),
+                pageable);
 
         List<AttendanceItemResponse> items = result.getContent().stream()
                 .map(a -> new AttendanceItemResponse(a.getId(), a.getCheckedInAt(),

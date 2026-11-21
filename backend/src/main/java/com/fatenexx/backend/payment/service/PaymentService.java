@@ -155,6 +155,7 @@ public class PaymentService {
         List<PaymentItemResponse> items = result.getContent().stream().map(p -> {
             PassInfo i = info.get(p.getId());
             return new PaymentItemResponse(p.getId(), p.getStatus().getLabel(), p.getAmount(), p.getPaidAt(),
+                    i == null ? null : PurchaseType.displayName(i.type(), i.ptType()),
                     i == null ? null : i.type(), i == null ? null : i.ptType(), i == null ? null : i.productName(),
                     i == null ? null : i.start(), i == null ? null : i.end());
         }).toList();
@@ -183,6 +184,7 @@ public class PaymentService {
             PassInfo i = info.get(p.getId());
             return new AdminPaymentItemResponse(p.getId(), p.getUser().getId(), p.getUser().getLoginId(),
                     p.getUser().getName(), p.getStatus().getLabel(), p.getAmount(), p.getPaidAt(),
+                    i == null ? null : PurchaseType.displayName(i.type(), i.ptType()),
                     i == null ? null : i.type(), i == null ? null : i.ptType(), i == null ? null : i.productName(),
                     i == null ? null : i.start(), i == null ? null : i.end());
         }).toList();

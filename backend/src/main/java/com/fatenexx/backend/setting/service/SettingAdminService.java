@@ -61,8 +61,8 @@ public class SettingAdminService {
     public SettingListResponse update(UpdateSettingsRequest request) {
         Set<String> seen = new HashSet<>();
         for (SettingChangeRequest c : request.settings()) {
-            if (!seen.add(c.key())) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT, "같은 설정이 중복되었습니다: " + c.key());
+            if (!seen.add(c.settingKey())) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "같은 설정이 중복되었습니다: " + c.settingKey());
             }
         }
 
@@ -75,18 +75,18 @@ public class SettingAdminService {
         current.forEach((k, s) -> next.put(k, s.getSettingValue()));
 
         for (SettingChangeRequest c : request.settings()) {
-            Setting setting = current.get(c.key());
+            Setting setting = current.get(c.settingKey());
             if (setting == null) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 설정입니다: " + c.key());
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "존재하지 않는 설정입니다: " + c.settingKey());
             }
-            if (c.key().equals(SettingKey.SLOT_MINUTES) && !c.value().equals(setting.getSettingValue())) {
+            if (c.settingKey().equals(SettingKey.SLOT_MINUTES) && !c.settingValue().equals(setting.getSettingValue())) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT, "수업 단위(SLOT_MINUTES)는 바꿀 수 없습니다.");
             }
-            Integer min = MIN_VALUE.get(c.key());
-            if (min != null && c.value() < min) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT, c.key() + " 은(는) " + min + " 이상이어야 합니다.");
+            Integer min = MIN_VALUE.get(c.settingKey());
+            if (min != null && c.settingValue() < min) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, c.settingKey() + " 은(는) " + min + " 이상이어야 합니다.");
             }
-            next.put(c.key(), c.value());
+            next.put(c.settingKey(), c.settingValue());
         }
 
         // 2) 값끼리 맞는지 검사 (이번에 바꾸지 않은 기존 값까지 합쳐서)
@@ -94,7 +94,7 @@ public class SettingAdminService {
 
         // 3) 저장
         for (SettingChangeRequest c : request.settings()) {
-            current.get(c.key()).changeValue(c.value());
+            current.get(c.settingKey()).changeValue(c.settingValue());
         }
         return toResponse();
     }

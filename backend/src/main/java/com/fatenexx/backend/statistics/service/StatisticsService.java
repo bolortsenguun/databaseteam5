@@ -53,14 +53,15 @@ public class StatisticsService {
                 statisticsRepository.sumRevenue(PaymentStatus.SUCCESS, today.withDayOfMonth(1).atStartOfDay(), end),
                 statisticsRepository.countUsers(Role.MEMBER, null),
                 statisticsRepository.countUsers(Role.TRAINER, ApprovalStatus.APPROVED),
-                statisticsRepository.countUsers(Role.TRAINER, ApprovalStatus.PENDING));
+                statisticsRepository.countUsers(Role.TRAINER, ApprovalStatus.PENDING),
+                LocalDateTime.now(KST));
     }
 
-    /** 관리자 통계 (기간 생략 시 이번 달 1일 ~ 오늘) */
+    /** 관리자 통계 (기간 생략 시 이번 달 1일 ~ 말일) */
     public StatisticsResponse getStatistics(LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now(KST);
         LocalDate f = (from == null) ? today.withDayOfMonth(1) : from;
-        LocalDate t = (to == null) ? today : to;
+        LocalDate t = (to == null) ? today.withDayOfMonth(today.lengthOfMonth()) : to;
         if (f.isAfter(t)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "시작일이 종료일보다 늦을 수 없습니다.");
         }
@@ -77,7 +78,7 @@ public class StatisticsService {
                     ((Number) row[2]).longValue(), ((Number) row[3]).longValue()));
         }
 
-        return new StatisticsResponse(f, t, totalRevenue, monthly,
+        return new StatisticsResponse(new StatisticsResponse.Period(f, t), totalRevenue, monthly,
                 buildTrainerPerformance(f, t), buildHourlyEntries(start, end));
     }
 

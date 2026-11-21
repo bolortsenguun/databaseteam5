@@ -8,7 +8,7 @@ public record KioskCheckinResponse(
         String entryType,         // 회원권 / PT
         Long reservationId,       // PT 입장일 때만
         @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime checkedInAt,
-        boolean recorded,         // false면 10분 안 재입장이라 새로 기록하지 않음
+        boolean duplicate,        // true면 10분 안 재입장이라 새로 기록하지 않음
         String message,
         String name,                      // 입장 완료 화면용: 가리지 않은 이름
         KioskMembershipInfo membership,   // 오늘 유효한 회원권 (없으면 null)

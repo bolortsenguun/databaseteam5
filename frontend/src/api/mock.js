@@ -2,18 +2,8 @@ import { seed } from './mockData'
 
 const MODE = (import.meta.env.VITE_MOCK || 'missing').toLowerCase()
 
-const MISSING = [
-  /^\/payments\//,
-  /^\/admin\/payments/,
-  /^\/passes\/me/,
-  /^\/trainers\/me\/clients/,
-  /^\/kiosk\//,
-  /^\/attendances\//,
-  /^\/admin\/attendances/,
-  /^\/admin\/dashboard/,
-  /^\/admin\/statistics/,
-  /^\/admin\/settings/
-]
+// 백엔드에 아직 없는 API만 목업으로 처리하는 목록 (지금은 전부 구현되어 비어 있음)
+const MISSING = []
 
 export const mockMode = MODE
 
