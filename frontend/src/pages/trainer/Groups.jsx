@@ -5,6 +5,7 @@ import { Async, Badge, Confirm, Field, Loading, Modal, PageTitle, Seg, Tabs, use
 import { addDays, fmtMD, GROUP_WORKOUTS, nowLocalISO, reasonText, today } from '../../lib/format'
 import { resizeImage } from '../../lib/image'
 import { ReasonCancel } from './Lessons'
+import { useSettings } from '../../lib/settings'
 
 export default function TrainerGroups() {
   const toast = useToast()
@@ -16,6 +17,7 @@ export default function TrainerGroups() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const now = nowLocalISO()
+  const S = useSettings()
 
   const remove = async () => {
     setBusy(true)
@@ -34,7 +36,7 @@ export default function TrainerGroups() {
 
   return (
     <main className="page">
-      <PageTitle title="그룹 수업" sub="수업 48시간 전부터 30일 후까지 열 수 있어요. 시작 24시간 전에 최소 인원이 안 되면 자동으로 폐강돼요.">
+      <PageTitle title="그룹 수업" sub={`지금부터 ${S.GROUP_OPEN_MIN_HOURS}시간 뒤 ~ ${S.GROUP_OPEN_MAX_DAYS}일 후 사이의 수업을 열 수 있어요. 시작 ${S.GROUP_CONFIRM_HOURS}시간 전에 최소 인원(${S.GROUP_MIN_PARTICIPANTS}명)이 안 되면 자동으로 폐강돼요.`}>
         <Tabs value={view} options={[['upcoming', '다가오는 수업'], ['past', '지난 수업']]} onChange={setView} />
         <button className="btn primary" onClick={() => setForm({})}>수업 열기</button>
       </PageTitle>
@@ -105,6 +107,7 @@ function ClassForm({ initial, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   const slots = useAsync(() => (f.classDate ? groups.availableSlots(f.classDate) : Promise.resolve(null)), [f.classDate])
   const set = (k, v) => setF(s => ({ ...s, [k]: v }))
+  const S = useSettings()
   const isOriginal = edit && f.classDate === initial.classDate && f.startTime === initial.startTime
 
   const save = async () => {
@@ -182,8 +185,8 @@ function ClassForm({ initial, onClose, onSaved }) {
         </div>
       </div>
       <div className="grid g2" style={{ gap: 16 }}>
-        <Field label="날짜" hint="48시간 뒤부터 30일 안">
-          <input className="input" type="date" min={today()} max={addDays(today(), 30)} value={f.classDate} onChange={e => setF(s => ({ ...s, classDate: e.target.value, startTime: edit && e.target.value === initial.classDate ? initial.startTime : '' }))} />
+        <Field label="날짜" hint={`${S.GROUP_OPEN_MIN_HOURS}시간 뒤부터 ${S.GROUP_OPEN_MAX_DAYS}일 안`}>
+          <input className="input" type="date" min={today()} max={addDays(today(), S.GROUP_OPEN_MAX_DAYS)} value={f.classDate} onChange={e => setF(s => ({ ...s, classDate: e.target.value, startTime: edit && e.target.value === initial.classDate ? initial.startTime : '' }))} />
         </Field>
         <div className="field">
           정원
@@ -191,7 +194,7 @@ function ClassForm({ initial, onClose, onSaved }) {
         </div>
       </div>
       <div className="field">
-        시작 시간 (60분 수업)
+        시작 시간 ({S.SLOT_MINUTES}분 수업)
         {slots.loading ? <Loading /> : slots.error ? <div className="alert bad">{slots.error.message}</div> : !slots.data?.slots.length ? (
           <div className="empty">이날은 근무 시간이 없어요. 근무 시간 메뉴에서 먼저 등록해 주세요.</div>
         ) : (

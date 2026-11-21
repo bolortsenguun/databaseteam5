@@ -3,8 +3,10 @@ import { attendance } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
 import { Async, Field, PageTitle, Pager, Seg } from '../../components/ui'
 import { addDays, fmtDateTime, fmtPhone, today } from '../../lib/format'
+import { useSettings } from '../../lib/settings'
 
 export default function AdminAttendance() {
+  const S = useSettings()
   const [f, setF] = useState({ startDate: today(), endDate: today(), entryType: '전체' })
   const [q, setQ] = useState({ ...f, page: 1 })
   const [err, setErr] = useState('')
@@ -18,7 +20,7 @@ export default function AdminAttendance() {
   }
   return (
     <main className="page">
-      <PageTitle title="출석" sub="키오스크 체크인 기록이에요. 10분 안에 다시 누른 체크인은 한 번만 남아요." />
+      <PageTitle title="출석" sub={`키오스크 체크인 기록이에요. ${S.RECHECKIN_MINUTES}분 안에 다시 누른 체크인은 한 번만 남아요.`} />
       <div className="card">
         <div className="row" style={{ alignItems: 'flex-end' }}>
           <Field label="시작일"><input className="input" type="date" value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} /></Field>

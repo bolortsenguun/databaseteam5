@@ -47,6 +47,7 @@ export const stats = {
 }
 
 export const settings = {
+  public: () => get('/settings'),
   get: () => get('/admin/settings'),
   save: list => patch('/admin/settings', { settings: list })
 }

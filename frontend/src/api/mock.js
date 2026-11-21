@@ -583,6 +583,7 @@ const routes = [
     const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: db.attendances.filter(a => inRange(a.checkedInAt, start, end) && Number(a.checkedInAt.slice(11, 13)) === h).length }))
     return ok({ period: { startDate: start, endDate: end }, monthlyRevenue: [...months.values()].sort((a, c) => a.month.localeCompare(c.month)), trainerPerformance, hourlyCheckins: hourly }, '관리자 통계를 조회했습니다.')
   }],
+  ['GET', /^\/settings$/, ['MEMBER', 'TRAINER', 'ADMIN'], () => ok({ settings: Object.fromEntries(db.settings.map(s => [s.settingKey, s.settingValue])) }, '조회되었습니다.')],
   ['GET', /^\/admin\/settings$/, ['ADMIN'], () => ok({ settings: [...db.settings].sort((a, b) => a.settingKey.localeCompare(b.settingKey)) }, '운영 설정을 조회했습니다.')],
   ['PATCH', /^\/admin\/settings$/, ['ADMIN'], (p, q, b) => {
     const list = b?.settings
