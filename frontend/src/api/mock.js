@@ -332,7 +332,7 @@ const routes = [
     const kw = (q.keyword || '').trim()
     const list = db.users.filter(u => u.role === 'MEMBER' && (!kw || u.name.includes(kw) || u.loginId.includes(kw) || u.phone.includes(kw.replace(/\D/g, '') || '@@'))).sort((a, b) => b.id - a.id)
     const pg = page(list, q.page ?? 0, q.size, 0)
-    return ok({ members: pg.items.map(u => ({ userId: u.id, loginId: u.loginId, name: u.name, phone: u.phone, gender: u.gender, createdAt: u.createdAt })), page: pg.page, size: pg.size, totalElements: pg.total, totalPages: pg.totalPages }, '회원 목록을 조회했습니다.')
+    return ok({ members: pg.items.map(u => ({ userId: u.id, loginId: u.loginId, name: u.name, phone: u.phone, gender: u.gender, createdAt: u.createdAt })), page: pg.page, size: pg.size, totalCount: pg.total, totalPages: pg.totalPages }, '회원 목록을 조회했습니다.')
   }],
   ['GET', /^\/admin\/members\/(\d+)$/, ['ADMIN'], p => {
     const u = userById(Number(p[0]))
