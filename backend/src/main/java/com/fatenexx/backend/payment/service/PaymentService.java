@@ -58,7 +58,7 @@ public class PaymentService {
         // 같은 회원의 동시 구매로 기간이 겹치지 않도록 회원 행을 잠근다
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        boolean fail = Boolean.TRUE.equals(req.simulateFail());
+        boolean fail = resolveFail(req);
 
         if (req.purchaseType() == PurchaseType.MEMBERSHIP) {
             return buyMembership(user, req, fail);
@@ -117,6 +117,20 @@ public class PaymentService {
         PtPass pass = ptPassRepository.save(PtPass.create(user, product, trainer, payment, start));
         return PaymentResultResponse.of(payment, PurchaseType.PT, product.getName(),
                 pass.getStartDate(), pass.getEndDate());
+    }
+
+    // [추가] 실패 여부: simulateFail(true/false) 또는 simulationResult("성공"/"실패") 둘 중 어느 쪽으로 와도 됨
+    private boolean resolveFail(SimulatePaymentRequest req) {
+        String r = req.simulationResult();
+        boolean failByResult = false;
+        if (r != null && !r.isBlank()) {
+            if (r.equals("실패") || r.equals("FAIL")) {
+                failByResult = true;
+            } else if (!(r.equals("성공") || r.equals("SUCCESS"))) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "simulationResult는 성공 또는 실패여야 합니다.");
+            }
+        }
+        return Boolean.TRUE.equals(req.simulateFail()) || failByResult;
     }
 
     /** 시작일: 미입력이면 기본값, 입력하면 기본값 ~ 기본값+PASS_START_MAX_DAYS 안이어야 함 */

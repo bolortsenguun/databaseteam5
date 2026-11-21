@@ -12,6 +12,7 @@ public record PtPassItemResponse(
         LocalDate endDate,
         int totalCount,
         int remainingCount,     // 차감 후 남은 횟수
+        int usedCount,          // 사용한 횟수 = total - remaining
         long reservedCount,     // 예약 + 결과대기로 확보된 횟수
         long availableCount,    // 새로 예약할 수 있는 횟수 = remaining - reserved
         String status           // 이용예정 / 이용중 / 소진 / 만료
