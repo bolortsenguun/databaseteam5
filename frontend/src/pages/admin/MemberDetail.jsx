@@ -42,12 +42,12 @@ export default function AdminMemberDetail() {
                 <dt>성별</dt><dd>{genderLabel(u.gender)}</dd>
               </dl>
             </section>
+            <MemberPasses memberships={u.memberships || []} ptPasses={u.ptPasses || []} />
             {edit && <EditMember u={u} onClose={() => setEdit(false)} onSaved={v => { m.setData(v); setEdit(false) }} />}
             {reset && <ResetPassword userId={u.userId} name={u.name} onClose={() => setReset(false)} />}
           </>
         )}
       </Async>
-      <div className="alert small">회원 이용권(회원권·PT 이용권)을 관리자가 보는 API가 아직 없어서, 예약·결제·출석 기록만 보여 줘요.</div>
       <section className="card">
         <div className="row between">
           <h3>최근 예약</h3>
@@ -98,6 +98,66 @@ export default function AdminMemberDetail() {
         </section>
       </div>
     </main>
+  )
+}
+
+// 이용 중 → 이용 예정 → 소진 → 만료, 같은 상태끼리는 먼저 끝나는 것부터
+const PASS_ORDER = { '이용중': 0, '이용예정': 1, '소진': 2, '만료': 3 }
+const byStatus = (a, b) => (PASS_ORDER[a.status] ?? 9) - (PASS_ORDER[b.status] ?? 9) || a.endDate.localeCompare(b.endDate)
+const dimIfDone = s => (s === '만료' || s === '소진' ? { opacity: 0.55 } : undefined)
+
+function MemberPasses({ memberships, ptPasses }) {
+  const ms = [...memberships].sort(byStatus)
+  const pts = [...ptPasses].sort(byStatus)
+  return (
+    <>
+      <section className="card">
+        <h3>회원권</h3>
+        {ms.length === 0 ? <Empty>구매한 회원권이 없어요.</Empty> : (
+          <div className="tblwrap">
+            <table className="tbl">
+              <thead><tr><th>회원권</th><th>기간</th><th>구매 금액</th><th>상태</th></tr></thead>
+              <tbody>
+                {ms.map(m => (
+                  <tr key={m.membershipId} style={dimIfDone(m.status)}>
+                    <td><b>{m.productName}</b></td>
+                    <td>{fmtDate(m.startDate)} ~ {fmtDate(m.endDate)}</td>
+                    <td className="num">{m.price != null ? fmtMoney(m.price) : '-'}</td>
+                    <td>
+                      <Badge s={m.status} />
+                      {m.status === '이용중' && <span className="muted small"> {m.remainingDays}일 남음</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      <section className="card">
+        <h3>PT 이용권</h3>
+        {pts.length === 0 ? <Empty>구매한 PT 이용권이 없어요.</Empty> : (
+          <div className="tblwrap">
+            <table className="tbl">
+              <thead><tr><th>이용권</th><th>트레이너</th><th>기간</th><th>예약 가능</th><th>예약 중</th><th>사용</th><th>상태</th></tr></thead>
+              <tbody>
+                {pts.map(x => (
+                  <tr key={x.ptPassId} style={dimIfDone(x.status)}>
+                    <td><b>{x.productName}</b></td>
+                    <td>{x.trainerName || (x.ptType === '그룹' ? '그룹 수업' : '-')}</td>
+                    <td>{fmtDate(x.startDate)} ~ {fmtDate(x.endDate)}</td>
+                    <td className="num">{x.availableCount}</td>
+                    <td className="num">{x.reservedCount}</td>
+                    <td className="num">{x.usedCount} <span className="dim small">/ {x.totalCount}회</span></td>
+                    <td><Badge s={x.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
   )
 }
 
