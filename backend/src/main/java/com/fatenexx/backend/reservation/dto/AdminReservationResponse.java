@@ -12,6 +12,7 @@ public record AdminReservationResponse(
         Long reservationId,
         Long userId,
         String userName,
+        String userPhone,
         Long trainerId,
         String trainerName,
         String ptType,
@@ -31,6 +32,7 @@ public record AdminReservationResponse(
     public static AdminReservationResponse from(PtReservation r) {
         boolean group = r.getGroupClass() != null;
         return new AdminReservationResponse(r.getId(), r.getUser().getId(), r.getUser().getName(),
+                r.getUser().getPhone(),                                          // [추가]
                 r.getTrainer().getId(), r.getTrainer().getName(), r.getPtPass().getPtType().getLabel(),
                 r.getPtPass().getId(),
                 group ? r.getGroupClass().getId() : null,

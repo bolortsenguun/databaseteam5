@@ -46,6 +46,16 @@ public class SettingAdminService {
         return toResponse();
     }
 
+    // [추가] 회원·트레이너용 읽기: 키 → 값 (키 이름순)
+    @Transactional(readOnly = true)
+    public PublicSettingsResponse getPublicSettings() {
+        java.util.Map<String, Integer> map = new java.util.TreeMap<>();
+        for (Setting s : settingRepository.findAll()) {
+            map.put(s.getSettingKey(), s.getSettingValue());
+        }
+        return new PublicSettingsResponse(map);
+    }
+
     /** 여러 설정을 한 번에 변경 (하나라도 틀리면 전부 취소) */
     @Transactional
     public SettingListResponse update(UpdateSettingsRequest request) {
