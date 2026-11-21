@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { settings } from '../../api/endpoints'
 import { useAsync } from '../../lib/hooks'
 import { Async, PageTitle, useToast } from '../../components/ui'
+import { refreshSettings } from '../../lib/settings'
 
 const META = {
   CANCEL_DEADLINE_HOURS: ['예약 취소', '차감 없이 취소할 수 있는 기한', '시간 전', 1],
@@ -50,6 +51,7 @@ export default function AdminSettings() {
       await settings.save(changed.map(k => ({ settingKey: k, settingValue: Number(vals[k]) })))
       toast('운영 설정을 저장했어요.')
       s.reload()
+      refreshSettings()   // 다른 화면 안내 문구도 새 값으로
     } catch (e) {
       setErr(e.message)
     } finally {

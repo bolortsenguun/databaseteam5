@@ -4,16 +4,17 @@ import { trainers as trainersApi, reservations, groups, passes } from '../../api
 import { useAsync, useSafeAsync } from '../../lib/hooks'
 import { Async, Badge, Confirm, Empty, ErrorBox, Loading, PageTitle, Tabs, useToast } from '../../components/ui'
 import { addDays, fmtMD, fmtMDShort, reasonText, REASON_LONG, today } from '../../lib/format'
+import { useSettings } from '../../lib/settings'
 
-const RANGE = 14
 
 export default function MemberBook() {
   const [sp, setSp] = useSearchParams()
   const tab = sp.get('tab') === 'group' ? 'group' : 'personal'
   const myPasses = useSafeAsync(() => passes.mine(), null, [])
+  const S = useSettings()
   return (
     <main className="page">
-      <PageTitle title="PT 예약" sub={tab === 'personal' ? `개인 PT는 오늘부터 ${RANGE}일 안, 정시 단위로 예약해요.` : '열려 있는 수업을 골라 신청하세요. 그룹 PT 이용권이 필요해요.'}>
+      <PageTitle title="PT 예약" sub={tab === 'personal' ? `개인 PT는 오늘부터 ${S.BOOKING_RANGE_DAYS}일 안, 정시 단위로 예약해요.` : '열려 있는 수업을 골라 신청하세요. 그룹 PT 이용권이 필요해요.'}>
         <Tabs value={tab} options={[['personal', '개인 PT'], ['group', '그룹 PT']]} onChange={v => setSp(v === 'group' ? { tab: 'group' } : {})} />
       </PageTitle>
       {tab === 'personal' ? <Personal myPasses={myPasses} initialTrainer={sp.get('trainer')} /> : <Group myPasses={myPasses} />}
@@ -39,7 +40,9 @@ function Personal({ myPasses, initialTrainer }) {
   }, [tr.data, myPasses.data])
 
   const slots = useAsync(() => (trainerId ? reservations.slots(trainerId, date) : Promise.resolve(null)), [trainerId, date])
-  const days = useMemo(() => Array.from({ length: RANGE + 1 }, (_, i) => addDays(today(), i)), [])
+  const S = useSettings()
+  const range = S.BOOKING_RANGE_DAYS
+  const days = useMemo(() => Array.from({ length: range + 1 }, (_, i) => addDays(today(), i)), [range])
   const passOfTrainer = personalPasses.filter(p => p.trainerId === trainerId)
   const available = passOfTrainer.reduce((s, p) => s + p.availableCount, 0)
   const trainerName = tr.data?.trainers.find(t => t.trainerId === trainerId)?.name
@@ -120,7 +123,7 @@ function Personal({ myPasses, initialTrainer }) {
           </div>
         )}
         <div className="alert small">
-          원하는 시간을 누르면 예약 확인 창이 열려요. 예약한 뒤 10분 안에, 또는 수업 24시간 전까지 취소하면 횟수가 차감되지 않아요.
+          원하는 시간을 누르면 예약 확인 창이 열려요. 예약한 뒤 {S.FREE_CANCEL_MINUTES}분 안에, 또는 수업 {S.CANCEL_DEADLINE_HOURS}시간 전까지 취소하면 횟수가 차감되지 않아요.
         </div>
       </div>
 
@@ -140,7 +143,9 @@ function Personal({ myPasses, initialTrainer }) {
 
 function Group({ myPasses }) {
   const toast = useToast()
-  const list = useAsync(() => groups.memberList({ startDate: today(), endDate: addDays(today(), RANGE) }), [])
+  const S = useSettings()
+  const range = S.BOOKING_RANGE_DAYS
+  const list = useAsync(() => groups.memberList({ startDate: today(), endDate: addDays(today(), range) }), [range])
   const [pick, setPick] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -195,7 +200,7 @@ function Group({ myPasses }) {
                       <span className="muted">신청 <b className="num" style={{ color: 'var(--text)' }}>{c.currentParticipants} / {c.capacity}</b>명</span>
                     </div>
                     {c.description && <p className="muted" style={{ margin: 0, lineHeight: 1.6 }}>{c.description}</p>}
-                    <span className="dim small">최소 2명 모집 · 수업 24시간 전까지 미달이면 폐강돼요.</span>
+                    <span className="dim small">최소 {S.GROUP_MIN_PARTICIPANTS}명 모집 · 수업 {S.GROUP_CONFIRM_HOURS}시간 전까지 미달이면 폐강돼요.</span>
                     {c.canReserve ? (
                       <button className="btn primary" onClick={() => { setErr(''); setPick(c) }}>신청하기</button>
                     ) : (
