@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;          // [추가]
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,9 +46,13 @@ public class PassService {
 
         List<MembershipItemResponse> memberships = membershipRepository
                 .findByUserIdOrderByStartDateDescIdDesc(userId).stream()
-                .map(m -> new MembershipItemResponse(m.getId(), m.getProduct().getName(),
-                        m.getStartDate(), m.getEndDate(), membershipStatus(m, today),
-                        m.getPrice()))                                        // [추가] 구매 당시 금액
+                .map(m -> {
+                    String status = membershipStatus(m, today);
+                    return new MembershipItemResponse(m.getId(), m.getProduct().getName(),
+                            m.getStartDate(), m.getEndDate(), status,
+                            m.getPrice(),                                     // 구매 당시 금액
+                            remainingDays(m, today, status));                 // [추가] 남은 일수
+                })
                 .toList();
 
         List<PtPassItemResponse> ptPasses = ptPassRepository
@@ -56,6 +61,12 @@ public class PassService {
                 .toList();
 
         return new MyPassesResponse(memberships, ptPasses);
+    }
+
+    // [추가] 이용 중인 회원권만 남은 일수 계산 (종료 당일은 0). 이용예정·만료는 0
+    private int remainingDays(Membership m, LocalDate today, String status) {
+        if (!ACTIVE.equals(status)) return 0;
+        return (int) Math.max(0, ChronoUnit.DAYS.between(today, m.getEndDate()));
     }
 
     private PtPassItemResponse toPtPassItem(PtPass p, LocalDate today) {
@@ -74,6 +85,7 @@ public class PassService {
                 p.getEndDate(),
                 p.getTotalCount(),          // 구매 당시 횟수 (상품 횟수가 바뀌어도 그대로)
                 p.getRemainingCount(),
+                p.getTotalCount() - p.getRemainingCount(),   // [추가] 사용한 횟수
                 reserved,
                 available,
                 status);
