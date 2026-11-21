@@ -288,6 +288,30 @@ function checkVisual(b) {
   if (b.imageUrl && b.imageUrl.length > 1500000) fail(400, 'INVALID_INPUT', '수업 사진 용량이 너무 큽니다.')
 }
 
+// 키오스크 입장 완료 화면용 정보 (백엔드 AttendanceService.buildXxx와 같은 규칙)
+function kioskExtras(uid, reservationId) {
+  const t = todayS()
+  const day = s => Math.round((pd(s) - pd(t)) / 86400000)
+  const m = db.memberships.filter(x => x.userId === uid && x.startDate <= t && t <= x.endDate).sort((a, c) => a.endDate.localeCompare(c.endDate))[0]
+  const membership = m ? { name: db.membershipProducts.find(x => x.id === m.productId)?.name, daysLeft: day(m.endDate), totalDays: Math.round((pd(m.endDate) - pd(m.startDate)) / 86400000) + 1, endDate: m.endDate } : null
+  const r = reservationId ? db.reservations.find(x => x.id === reservationId) : null
+  const pass = r ? db.ptPasses.find(x => x.id === r.ptPassId) : db.ptPasses.filter(x => x.userId === uid && x.startDate <= t && t <= x.endDate).sort((a, c) => a.endDate.localeCompare(c.endDate))[0]
+  const pv = pass ? passView(pass) : null
+  const pt = pv ? { name: pv.productName, remaining: pv.remainingCount, reserved: pv.reservedCount, available: pv.availableCount, total: pv.totalCount } : null
+  const month = t.slice(0, 7)
+  const monthAttendance = new Set(db.attendances.filter(a => a.userId === uid && a.checkedInAt.startsWith(month)).map(a => a.checkedInAt.slice(0, 10))).size
+  const n = now()
+  const nx = db.reservations.filter(x => x.userId === uid && x.status === '예약' && dt(x.lessonDate, x.startTime) >= n).sort((a, c) => (a.lessonDate + a.startTime).localeCompare(c.lessonDate + c.startTime))[0]
+  const W = ['일', '월', '화', '수', '목', '금', '토']
+  const nextLesson = nx ? {
+    date: `${Number(nx.lessonDate.slice(5, 7))}월 ${Number(nx.lessonDate.slice(8, 10))}일 (${W[pd(nx.lessonDate).getDay()]})`,
+    time: nx.startTime,
+    title: nx.groupClassId ? db.groupClasses.find(g => g.id === nx.groupClassId)?.name : '개인 PT',
+    trainer: userById(nx.trainerId)?.name
+  } : null
+  return { membership, pt, monthAttendance, nextLesson }
+}
+
 // 회원권 + PT 이용권 (내 이용권, 관리자 회원 상세 공용)
 function passesOf(uid) {
   const t = todayS()
@@ -469,7 +493,7 @@ const routes = [
     const n = now()
     const last = db.attendances.filter(a => a.userId === u.id).sort((a, c) => c.checkedInAt.localeCompare(a.checkedInAt))[0]
     if (last && (n - new Date(last.checkedInAt)) / 60000 < setting('RECHECKIN_MINUTES')) {
-      return ok({ attendanceId: last.id, name: u.name, entryType: last.entryType, reservationId: last.reservationId, checkedInAt: last.checkedInAt, duplicate: true }, '이미 체크인되었습니다.')
+      return ok({ attendanceId: last.id, name: u.name, entryType: last.entryType, reservationId: last.reservationId, checkedInAt: last.checkedInAt, duplicate: true, ...kioskExtras(u.id, last.reservationId) }, '이미 체크인되었습니다.')
     }
     const t = todayS()
     const hasM = db.memberships.some(m => m.userId === u.id && m.startDate <= t && t <= m.endDate)
@@ -496,7 +520,7 @@ const routes = [
     }
     const a = { id: nextId(db.attendances), userId: u.id, checkedInAt: isoDT(n), entryType, reservationId }
     db.attendances.push(a)
-    return ok({ attendanceId: a.id, name: u.name, entryType, reservationId, checkedInAt: a.checkedInAt, duplicate: false }, '체크인되었습니다.', 201)
+    return ok({ attendanceId: a.id, name: u.name, entryType, reservationId, checkedInAt: a.checkedInAt, duplicate: false, ...kioskExtras(u.id, reservationId) }, '체크인되었습니다.', 201)
   }],
   ['GET', /^\/attendances\/me$/, ['MEMBER'], (p, q, b, ctx) => {
     if (q.startDate && q.endDate && q.startDate > q.endDate) fail(400, 'INVALID_INPUT', '출석 이력 조회 조건을 확인해 주세요.')

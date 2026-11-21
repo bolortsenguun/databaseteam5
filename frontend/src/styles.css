@@ -254,3 +254,11 @@ h2.sec { margin: 0; font-weight: 900; font-size: 20px; letter-spacing: -0.02em; 
 .gimg { width: 100%; aspect-ratio: 16 / 9; max-height: 220px; object-fit: cover; border-radius: 16px; display: block; background: rgba(255,255,255,.04); border: 1px solid var(--line); }
 .gimg-pick { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .gimg-pick .gimg { width: 200px; }
+
+/* 키오스크 입장 완료 화면 */
+.kiosk-done { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(5,5,10,.78); backdrop-filter: blur(6px); }
+.kiosk-card { width: min(100%, 640px); max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 28px; padding: 36px; display: flex; flex-direction: column; gap: 22px; background: linear-gradient(135deg, #1D1D31, #12121D); border: 1px solid rgba(154,220,255,.35); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.kiosk-check { width: 56px; height: 56px; margin: 0 auto 6px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; font-weight: 900; color: #0B0B12; background: var(--irid); }
+.kiosk-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.kiosk-tile { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 20px; background: rgba(255,255,255,.04); border: 1px solid var(--line2); }
+.kiosk-next { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: 20px; background: rgba(154,220,255,.07); border: 1px solid rgba(154,220,255,.3); }
