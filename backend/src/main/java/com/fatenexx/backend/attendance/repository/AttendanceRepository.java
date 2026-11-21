@@ -21,6 +21,10 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     Page<Attendance> findByUserIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThan(
             Long userId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
+    // 키오스크 완료 화면: 기간 내 입장 기록 전부 (이번 달 출석 일수 계산용)
+    List<Attendance> findByUserIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThan(
+            Long userId, LocalDateTime from, LocalDateTime to);
+
     // 관리자 회원 상세: 최근 입장 기록 10건
     List<Attendance> findTop10ByUserIdOrderByCheckedInAtDesc(Long userId);
 

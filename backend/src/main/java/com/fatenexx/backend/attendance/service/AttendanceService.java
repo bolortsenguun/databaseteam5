@@ -7,7 +7,10 @@ import com.fatenexx.backend.attendance.repository.AttendanceRepository;
 import com.fatenexx.backend.global.auth.Role;
 import com.fatenexx.backend.global.exception.BusinessException;
 import com.fatenexx.backend.global.exception.ErrorCode;
+import com.fatenexx.backend.pass.entity.Membership;
+import com.fatenexx.backend.pass.entity.PtPass;
 import com.fatenexx.backend.pass.repository.MembershipRepository;
+import com.fatenexx.backend.pass.repository.PtPassRepository;
 import com.fatenexx.backend.reservation.entity.PtReservation;
 import com.fatenexx.backend.reservation.entity.ReservationStatus;
 import com.fatenexx.backend.reservation.repository.PtReservationRepository;
@@ -28,8 +31,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @Service
@@ -38,11 +43,17 @@ public class AttendanceService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter LESSON_DATE =                       // [추가]
+            DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN);          // [추가]
     private static final String NO_PASS_MESSAGE = "입장 가능한 이용권이 없습니다. 데스크에 문의해 주세요.";
+    // [추가] 횟수를 미리 확보하고 있는 예약 상태 (아직 차감은 안 됨)
+    private static final List<ReservationStatus> HOLDING =
+            List.of(ReservationStatus.RESERVED, ReservationStatus.PENDING_RESULT);
 
     private final AttendanceRepository attendanceRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
+    private final PtPassRepository ptPassRepository;                           // [추가]
     private final PtReservationRepository ptReservationRepository;
     private final SettingService settingService;
 
@@ -68,17 +79,19 @@ public class AttendanceService {
         Optional<Attendance> last = attendanceRepository.findFirstByUserIdOrderByCheckedInAtDesc(user.getId());
         if (last.isPresent() && last.get().getCheckedInAt().isAfter(now.minusMinutes(recheckMinutes))) {
             Attendance a = last.get();
-            return new KioskCheckinResponse(maskedName, a.getEntryType().getLabel(),
+            PtReservation lastReservation = a.getReservation();                // [추가]
+            return buildResponse(user, maskedName, a.getEntryType().getLabel(),
                     a.getReservation() == null ? null : a.getReservation().getId(),
-                    a.getCheckedInAt(), false, "이미 입장 처리되었습니다.");
+                    a.getCheckedInAt(), false, "이미 입장 처리되었습니다.",
+                    lastReservation == null ? null : lastReservation.getPtPass());
         }
 
         // 2) 오늘 유효한 회원권이 있으면 회원권 입장 (회원권과 PT 예약이 둘 다 있어도 회원권 우선, 처리 규칙 9번)
         if (membershipRepository.existsByUserIdAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                 user.getId(), today, today)) {
             attendanceRepository.save(Attendance.create(user, EntryType.MEMBERSHIP, null));
-            return new KioskCheckinResponse(maskedName, EntryType.MEMBERSHIP.getLabel(), null,
-                    now, true, "입장이 처리되었습니다.");
+            return buildResponse(user, maskedName, EntryType.MEMBERSHIP.getLabel(), null,
+                    now, true, "입장이 처리되었습니다.", null);
         }
 
         // 3) 회원권이 없으면 오늘 PT 예약 중 입장 가능 시간대에 있는 것을 찾는다
@@ -107,8 +120,8 @@ public class AttendanceService {
 
         if (matched != null) {
             Attendance saved = attendanceRepository.save(Attendance.create(user, EntryType.PT, matched));
-            return new KioskCheckinResponse(maskedName, EntryType.PT.getLabel(), matched.getId(),
-                    now, true, "PT 수업 입장이 처리되었습니다.");
+            return buildResponse(user, maskedName, EntryType.PT.getLabel(), matched.getId(),
+                    now, true, "PT 수업 입장이 처리되었습니다.", matched.getPtPass());
         }
 
         // 4) 입장 불가
@@ -117,6 +130,82 @@ public class AttendanceService {
                     "PT 입장 가능 시각은 " + nextEntryTime.format(HHMM) + "입니다.");
         }
         throw new BusinessException(ErrorCode.ENTRY_NOT_ALLOWED, NO_PASS_MESSAGE);
+    }
+
+    // [추가] 입장 완료 화면용 응답: 기본 정보 + 회원권·PT 이용권·이번 달 출석·다음 수업
+    private KioskCheckinResponse buildResponse(User user, String maskedName, String entryTypeLabel,
+                                               Long reservationId, LocalDateTime checkedInAt,
+                                               boolean recorded, String message, PtPass preferredPass) {
+        LocalDateTime now = LocalDateTime.now(KST);
+        LocalDate today = now.toLocalDate();
+        return new KioskCheckinResponse(
+                maskedName, entryTypeLabel, reservationId, checkedInAt, recorded, message,
+                user.getName(),
+                buildMembershipInfo(user.getId(), today),
+                buildPtInfo(user.getId(), today, preferredPass),
+                countMonthAttendanceDays(user.getId(), today),
+                buildNextLesson(user.getId(), now));
+    }
+
+    // [추가] 오늘 유효한 회원권 (여러 개면 종료일이 빠른 것). 없으면 null
+    private KioskMembershipInfo buildMembershipInfo(Long userId, LocalDate today) {
+        return membershipRepository.findByUserIdOrderByStartDateDescIdDesc(userId).stream()
+                .filter(m -> !m.getStartDate().isAfter(today) && !m.getEndDate().isBefore(today))
+                .min(Comparator.comparing(Membership::getEndDate))
+                .map(m -> new KioskMembershipInfo(
+                        m.getProduct().getName(),
+                        (int) ChronoUnit.DAYS.between(today, m.getEndDate()),      // 종료 당일은 0
+                        (int) ChronoUnit.DAYS.between(m.getStartDate(), m.getEndDate()) + 1,
+                        m.getEndDate()))
+                .orElse(null);
+    }
+
+    // [추가] PT로 입장했으면 그 예약의 이용권, 아니면 오늘 유효한 PT권 중 종료일이 가장 빠른 것. 없으면 null
+    private KioskPtInfo buildPtInfo(Long userId, LocalDate today, PtPass preferredPass) {
+        PtPass pass = preferredPass != null ? preferredPass
+                : ptPassRepository.findByUserIdOrderByStartDateDescIdDesc(userId).stream()
+                .filter(p -> !p.getStartDate().isAfter(today) && !p.getEndDate().isBefore(today))
+                .min(Comparator.comparing(PtPass::getEndDate))
+                .orElse(null);
+        if (pass == null) {
+            return null;
+        }
+        long reserved = ptReservationRepository.countByPtPassIdAndStatusIn(pass.getId(), HOLDING);
+        int remaining = pass.getRemainingCount();
+        long available = Math.max(0, remaining - reserved);
+        return new KioskPtInfo(pass.getProduct().getName(), remaining, reserved, available,
+                pass.getProduct().getTotalCount());
+    }
+
+    // [추가] 이번 달에 출석한 날 수 (같은 날 여러 번 입장해도 1일)
+    private long countMonthAttendanceDays(Long userId, LocalDate today) {
+        LocalDateTime from = today.withDayOfMonth(1).atStartOfDay();
+        LocalDateTime to = today.withDayOfMonth(1).plusMonths(1).atStartOfDay();
+        return attendanceRepository
+                .findByUserIdAndCheckedInAtGreaterThanEqualAndCheckedInAtLessThan(userId, from, to).stream()
+                .map(a -> a.getCheckedInAt().toLocalDate())
+                .distinct()
+                .count();
+    }
+
+    // [추가] 지금 이후 가장 가까운 '예약' 상태 수업 (개인·그룹 모두). 없으면 null
+    private KioskNextLesson buildNextLesson(Long userId, LocalDateTime now) {
+        LocalDate today = now.toLocalDate();
+        int rangeDays = Math.max(
+                settingService.getInt(SettingKey.BOOKING_RANGE_DAYS),
+                settingService.getInt(SettingKey.GROUP_OPEN_MAX_DAYS));
+
+        return ptReservationRepository
+                .findByUserIdAndLessonDateBetween(userId, today, today.plusDays(rangeDays)).stream()
+                .filter(r -> r.getStatus() == ReservationStatus.RESERVED)
+                .filter(r -> !LocalDateTime.of(r.getLessonDate(), r.getStartTime()).isBefore(now))
+                .min(Comparator.comparing((PtReservation r) -> LocalDateTime.of(r.getLessonDate(), r.getStartTime())))
+                .map(r -> new KioskNextLesson(
+                        r.getLessonDate().format(LESSON_DATE),
+                        r.getStartTime().format(HHMM),
+                        r.getGroupClass() == null ? "개인 PT" : r.getGroupClass().getName(),
+                        r.getTrainer().getName()))
+                .orElse(null);
     }
 
     /** 내 출석 기록 (기간 생략 가능) */

@@ -13,6 +13,8 @@ public record GroupClassCreateRequest(
         @Size(max = 200) String description,
         @NotNull LocalDate classDate,
         @NotNull @JsonFormat(pattern = "HH:mm") LocalTime startTime,
-        @NotNull Integer capacity
+        @NotNull Integer capacity,
+        @Size(max = 20) String workout,     // [추가] 운동 종류, 선택 (비우면 null)
+        String imageUrl                     // [추가] 수업 사진 data URL, 선택 (비우면 null)
 ) {
 }

@@ -163,6 +163,8 @@ CREATE TABLE group_classes (
                                trainer_id     BIGINT       NOT NULL COMMENT '개설한 트레이너 (승인된 트레이너)',
                                name           VARCHAR(100) NOT NULL COMMENT '수업명',
                                description    VARCHAR(200) NULL COMMENT '그룹 PT 수업 설명, 선택 입력 (최대 200자)',
+                               workout        VARCHAR(20)  NULL COMMENT '운동 종류(서킷/하체/상체/코어/전신/스트레칭/러닝/케틀벨/데드리프트/힙·브릿지), 선택',
+                               image_url      MEDIUMTEXT   NULL COMMENT '수업 사진(data URL, 프론트에서 720px JPEG로 축소), 없으면 NULL',
                                class_date     DATE         NOT NULL,
                                start_time     TIME         NOT NULL COMMENT '정시만 (BR-GRP-02)',
                                end_time       TIME         NOT NULL COMMENT '시작 + 1시간 고정',

@@ -46,7 +46,8 @@ public class PassService {
         List<MembershipItemResponse> memberships = membershipRepository
                 .findByUserIdOrderByStartDateDescIdDesc(userId).stream()
                 .map(m -> new MembershipItemResponse(m.getId(), m.getProduct().getName(),
-                        m.getStartDate(), m.getEndDate(), membershipStatus(m, today)))
+                        m.getStartDate(), m.getEndDate(), membershipStatus(m, today),
+                        m.getPrice()))                                        // [추가] 구매 당시 금액
                 .toList();
 
         List<PtPassItemResponse> ptPasses = ptPassRepository

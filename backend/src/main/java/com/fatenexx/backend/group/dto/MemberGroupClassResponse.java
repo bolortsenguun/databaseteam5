@@ -10,6 +10,8 @@ public record MemberGroupClassResponse(
         Long classId,
         String name,
         String description,
+        String workout,
+        String imageUrl,
         Long trainerId,
         String trainerName,
         LocalDate classDate,
@@ -24,6 +26,7 @@ public record MemberGroupClassResponse(
 ) {
     public static MemberGroupClassResponse of(GroupClass g, int current, String reason) {
         return new MemberGroupClassResponse(g.getId(), g.getName(), g.getDescription(),
+                g.getWorkout(), g.getImageUrl(),                                  // [추가]
                 g.getTrainer().getId(), g.getTrainer().getName(),
                 g.getClassDate(), g.getStartTime(), g.getEndTime(), g.getCapacity(),
                 current, g.getCapacity() - current, g.getStatus().getLabel(),

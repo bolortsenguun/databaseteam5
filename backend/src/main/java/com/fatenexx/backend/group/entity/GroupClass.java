@@ -34,6 +34,12 @@ public class GroupClass {
     @Column(name = "description", length = 200)
     private String description;         // 선택 입력
 
+    @Column(name = "workout", length = 20)                              // [추가]
+    private String workout;             // 운동 종류(서킷/하체/...), 선택 입력. 없으면 null   // [추가]
+
+    @Column(name = "image_url", columnDefinition = "MEDIUMTEXT")        // [추가]
+    private String imageUrl;            // 수업 사진 data URL(720px JPEG), 선택 입력. 없으면 null   // [추가]
+
     @Column(name = "class_date", nullable = false)
     private LocalDate classDate;
 
@@ -84,6 +90,12 @@ public class GroupClass {
         this.startTime = startTime;
         this.endTime = startTime.plusHours(1);
         this.capacity = capacity;
+    }
+
+    // [추가] 운동 종류·사진 변경 (null이면 비움). 값 검사는 서비스에서
+    public void changeVisual(String workout, String imageUrl) {
+        this.workout = workout;
+        this.imageUrl = imageUrl;
     }
 
     public void confirm() { this.status = GroupClassStatus.CONFIRMED; }   // 24시간 전 2명 이상
